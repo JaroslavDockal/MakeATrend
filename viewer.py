@@ -1,12 +1,8 @@
-"""
-Advanced GUI viewer for the CSV Signal Viewer – with multiple Y axes,
-custom styles, signal export, and axis labels with active signal names.
-"""
-
 from PySide6.QtWidgets import (
     QMainWindow, QFileDialog, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QCheckBox, QScrollArea, QSplitter, QStatusBar,
-    QDialog, QTableWidget, QTableWidgetItem, QHeaderView, QComboBox, QColorDialog, QSpinBox
+    QDialog, QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
+    QColorDialog, QSpinBox
 )
 from PySide6.QtCore import Qt
 import pyqtgraph as pg
@@ -97,6 +93,7 @@ class SignalViewer(QMainWindow):
         super().__init__()
         self.setWindowTitle("CSV Signal Viewer")
         self.resize(1400, 800)
+
         self.data_time = None
         self.data_signals = {}
         self.curves = {}
@@ -104,6 +101,8 @@ class SignalViewer(QMainWindow):
         self.signal_styles = {}
         self.viewboxes = {}
         self.axis_labels = {}
+        self.signal_widgets = {}
+        self.complex_mode = False
 
         self.init_ui()
 
@@ -111,46 +110,37 @@ class SignalViewer(QMainWindow):
         splitter = QSplitter(Qt.Horizontal)
         self.setCentralWidget(splitter)
 
-        # --- PLOT ---
+        # Plot
         date_axis = DateAxisItem(orientation='bottom')
         self.plot_widget = pg.PlotWidget(axisItems={'bottom': date_axis})
         self.plot_widget.showGrid(x=True, y=True)
         self.main_view = self.plot_widget.getViewBox()
         splitter.addWidget(self.plot_widget)
 
+        # ViewBoxes: only Left and Right
         self.viewboxes = {
             'Left': self.main_view,
-            'Right': pg.ViewBox(),
-            'Axis 3': pg.ViewBox(),
-            'Axis 4': pg.ViewBox()
+            'Right': pg.ViewBox()
         }
+        self.plot_widget.scene().addItem(self.viewboxes['Right'])
+        self.viewboxes['Right'].setXLink(self.main_view)
 
-        for name, vb in self.viewboxes.items():
-            if name != 'Left':
-                self.plot_widget.scene().addItem(vb)
-                vb.setXLink(self.main_view)
-            self.signal_axis_map[name] = []
-
+        self.signal_axis_map = {'Left': [], 'Right': []}
         self.axis_labels = {
             'Left': self.plot_widget.getAxis('left'),
             'Right': self.plot_widget.getAxis('right'),
-            'Axis 3': pg.AxisItem('left'),
-            'Axis 4': pg.AxisItem('right')
         }
-
         self.plot_widget.showAxis('right')
-        self.plot_widget.getAxis('right').linkToView(self.viewboxes['Right'])
+        self.axis_labels['Right'].linkToView(self.viewboxes['Right'])
 
         def sync_views():
             geom = self.main_view.sceneBoundingRect()
-            for name, vb in self.viewboxes.items():
-                if name != 'Left':
-                    vb.setGeometry(geom)
-                    vb.linkedViewChanged(self.main_view, vb.XAxis)
+            self.viewboxes['Right'].setGeometry(geom)
+            self.viewboxes['Right'].linkedViewChanged(self.main_view, self.viewboxes['Right'].XAxis)
 
         self.main_view.sigResized.connect(sync_views)
 
-        # --- CONTROL PANEL ---
+        # Control Panel
         control_panel = QWidget()
         splitter.addWidget(control_panel)
         layout = QVBoxLayout(control_panel)
@@ -158,6 +148,11 @@ class SignalViewer(QMainWindow):
         load_btn = QPushButton("Load CSV...")
         load_btn.clicked.connect(self.load_csv)
         layout.addWidget(load_btn)
+
+        self.toggle_mode_btn = QPushButton("Complicated Mode")
+        self.toggle_mode_btn.setCheckable(True)
+        self.toggle_mode_btn.toggled.connect(self.toggle_complex_mode)
+        layout.addWidget(self.toggle_mode_btn)
 
         self.cursor_a_chk = QCheckBox("Show Cursor A")
         self.cursor_b_chk = QCheckBox("Show Cursor B")
@@ -174,7 +169,6 @@ class SignalViewer(QMainWindow):
         self.scroll_layout = QVBoxLayout(self.scroll_content)
         layout.addWidget(self.scroll)
 
-        self.signal_widgets = {}
         self.cursor_a = pg.InfiniteLine(angle=90, movable=True, pen='m')
         self.cursor_b = pg.InfiniteLine(angle=90, movable=True, pen='c')
         self.cursor_a.setVisible(False)
@@ -187,6 +181,13 @@ class SignalViewer(QMainWindow):
 
         self.cursor_info = CursorInfoDialog(self)
         self.setStatusBar(QStatusBar())
+
+    def toggle_complex_mode(self, state):
+        self.complex_mode = state
+        for widgets in self.signal_widgets.values():
+            widgets['axis'].setVisible(state)
+            widgets['color_btn'].setVisible(state)
+            widgets['width'].setVisible(state)
 
     def load_csv(self):
         path, _ = QFileDialog.getOpenFileName(self, "Open CSV", "", "CSV Files (*.csv)")
@@ -211,15 +212,18 @@ class SignalViewer(QMainWindow):
             cb.stateChanged.connect(self.toggle_signal)
 
             axis_cb = QComboBox()
-            axis_cb.addItems(['Left', 'Right', 'Axis 3', 'Axis 4'])
+            axis_cb.addItems(['Left', 'Right'])
+            axis_cb.setVisible(False)
 
             color_btn = QPushButton("Color")
-            color_btn.setStyleSheet("background-color: black")
+            color_btn.setStyleSheet("background-color: white")
             color_btn.clicked.connect(lambda _, b=color_btn: self.pick_color(b))
+            color_btn.setVisible(False)
 
             width_spin = QSpinBox()
             width_spin.setRange(1, 10)
             width_spin.setValue(2)
+            width_spin.setVisible(False)
 
             row_layout.addWidget(cb)
             row_layout.addWidget(axis_cb)
@@ -235,6 +239,21 @@ class SignalViewer(QMainWindow):
                 'width': width_spin
             }
 
+    def clear_signals(self):
+        for curve in self.curves.values():
+            for vb in self.viewboxes.values():
+                vb.removeItem(curve)
+        self.curves.clear()
+        self.signal_axis_map = {'Left': [], 'Right': []}
+        self.signal_styles.clear()
+
+        for i in reversed(range(self.scroll_layout.count())):
+            widget = self.scroll_layout.itemAt(i).widget()
+            if widget:
+                widget.setParent(None)
+        self.signal_widgets.clear()
+        self.update_axis_labels()
+
     def pick_color(self, btn):
         color = QColorDialog.getColor()
         if color.isValid():
@@ -244,10 +263,16 @@ class SignalViewer(QMainWindow):
         cb = self.sender()
         for name, widgets in self.signal_widgets.items():
             if widgets['checkbox'] == cb:
-                axis = widgets['axis'].currentText()
-                color = widgets['color_btn'].palette().button().color().name()
-                width = widgets['width'].value()
                 if cb.isChecked():
+                    if self.complex_mode:
+                        color = widgets['color_btn'].palette().button().color().name()
+                        width = widgets['width'].value()
+                        axis = widgets['axis'].currentText()
+                    else:
+                        color = '#ffffff'
+                        width = 2
+                        axis = 'Left'
+
                     curve = pg.PlotCurveItem(
                         x=self.data_time,
                         y=self.data_signals[name],
@@ -271,21 +296,6 @@ class SignalViewer(QMainWindow):
             names = self.signal_axis_map.get(axis, [])
             short_names = [n.split("[")[0] for n in names]
             label.setLabel(text=", ".join(short_names) if short_names else axis)
-
-    def clear_signals(self):
-        for curve in self.curves.values():
-            for vb in self.viewboxes.values():
-                vb.removeItem(curve)
-        self.curves.clear()
-        self.signal_axis_map = {k: [] for k in self.viewboxes}
-        self.signal_styles.clear()
-
-        for i in reversed(range(self.scroll_layout.count())):
-            widget = self.scroll_layout.itemAt(i).widget()
-            if widget:
-                widget.setParent(None)
-        self.signal_widgets.clear()
-        self.update_axis_labels()
 
     def toggle_cursor(self, cursor, state):
         cursor.setVisible(state)
