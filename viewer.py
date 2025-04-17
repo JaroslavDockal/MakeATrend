@@ -1,186 +1,220 @@
 """
-SignalViewer is a GUI tool for visualizing time-series signals from CSV files.
-
-Features:
-- Load CSV file (first column = time, rest = signals)
-- Select/deselect signals to display
-- Interactive zoom, pan
-- Two movable cursors with delta time & value
-- Toggle grid and Y-axis scaling
+Main GUI viewer for the CSV Signal Viewer application.
 """
-
 from PySide6.QtWidgets import (
     QMainWindow, QFileDialog, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QCheckBox, QScrollArea, QComboBox
+    QPushButton, QLabel, QCheckBox, QScrollArea, QSplitter, QStatusBar,
+    QDialog, QTableWidget, QTableWidgetItem, QHeaderView
 )
+from PySide6.QtCore import Qt
 import pyqtgraph as pg
-import pandas as pd
+from pyqtgraph import DateAxisItem
+from utils import parse_csv_file, find_nearest_index
+import datetime
 import numpy as np
-from utils import parse_csv_file, get_signal_values_at_time
+
+
+class CursorInfoDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Cursor Information")
+        self.resize(600, 400)
+        self.layout = QVBoxLayout(self)
+
+        self.header_label = QLabel("Cursor Info")
+        self.layout.addWidget(self.header_label)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["Signal", "A", "B", "Δ", "Δ/s"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.layout.addWidget(self.table)
+
+    def update_data(self, time_a, time_b, values_a, values_b):
+        self._time_a = time_a
+        self._time_b = time_b
+        self._values_a = values_a
+        self._values_b = values_b
+
+        self.header_label.setText(
+            f"Cursor A: {time_a}    Cursor B: {time_b}    Δt: {self.calc_time_delta(time_a, time_b)}"
+        )
+
+        try:
+            fmt = "%H:%M:%S.%f"
+            t1 = datetime.datetime.strptime(time_a, fmt)
+            t2 = datetime.datetime.strptime(time_b, fmt)
+            delta_t = (t2 - t1).total_seconds()
+        except:
+            delta_t = None
+
+        keys = sorted(set(values_a.keys()) | set(values_b.keys()))
+        self.table.setRowCount(len(keys))
+
+        for i, key in enumerate(keys):
+            a_val = values_a.get(key, np.nan)
+            b_val = values_b.get(key, np.nan)
+            delta = b_val - a_val if not (np.isnan(a_val) or np.isnan(b_val)) else np.nan
+            delta_per_sec = delta / delta_t if delta_t and not np.isnan(delta) else np.nan
+
+            self.table.setItem(i, 0, QTableWidgetItem(str(key)))
+            self.table.setItem(i, 1, QTableWidgetItem(f"{a_val:.3f}" if not np.isnan(a_val) else "-"))
+            self.table.setItem(i, 2, QTableWidgetItem(f"{b_val:.3f}" if not np.isnan(b_val) else "-"))
+            self.table.setItem(i, 3, QTableWidgetItem(f"{delta:.3f}" if not np.isnan(delta) else "-"))
+            self.table.setItem(i, 4, QTableWidgetItem(f"{delta_per_sec:.3f}" if not np.isnan(delta_per_sec) else "-"))
+
+    def calc_time_delta(self, t1_str, t2_str):
+        try:
+            fmt = "%H:%M:%S.%f"
+            t1 = datetime.datetime.strptime(t1_str, fmt)
+            t2 = datetime.datetime.strptime(t2_str, fmt)
+            delta = abs((t2 - t1).total_seconds())
+            return f"{delta:.3f} s"
+        except:
+            return "-"
+
+    def showEvent(self, event):
+        # Prevent resetting window position
+        self.move(self.pos())
+        super().showEvent(event)
 
 
 class SignalViewer(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("CSV Signal Viewer")
-        self.resize(1200, 700)
+        self.resize(1400, 800)
 
-        # Main widget and layout
-        main_widget = QWidget()
-        self.setCentralWidget(main_widget)
-        layout = QHBoxLayout(main_widget)
+        self.data_time = None
+        self.data_signals = {}
+        self.plotted_curves = {}
 
-        # Plot setup
-        self.plot_widget = pg.PlotWidget()
-        self.plot_widget.showGrid(x=False, y=False)
-        self.plot_widget.addLegend()
-        layout.addWidget(self.plot_widget, stretch=1)
-
-        # Sidebar controls
-        self.controls = QWidget()
-        self.controls_layout = QVBoxLayout(self.controls)
-        layout.addWidget(self.controls, stretch=0)
-
-        self._init_controls()
-
-        # Internal state
-        self.data = None
-        self.time = None
-        self.signals = {}
-        self.curves = {}
-
-    def _init_controls(self):
-        """Initialize control buttons and layout."""
-        open_btn = QPushButton("Open CSV...")
-        open_btn.clicked.connect(self.open_csv)
-        self.controls_layout.addWidget(open_btn)
-
-        self.grid_cb = QCheckBox("Show Grid")
-        self.grid_cb.stateChanged.connect(self.toggle_grid)
-        self.controls_layout.addWidget(self.grid_cb)
-
-        self.yscale_combo = QComboBox()
-        self.yscale_combo.addItems(["Auto", "Full Range"])
-        self.yscale_combo.currentTextChanged.connect(self.change_yscale)
-        self.controls_layout.addWidget(QLabel("Y-axis Scale"))
-        self.controls_layout.addWidget(self.yscale_combo)
-
-        self.cursor_a_btn = QPushButton("Toggle Cursor A")
-        self.cursor_b_btn = QPushButton("Toggle Cursor B")
-        self.cursor_a_btn.setCheckable(True)
-        self.cursor_b_btn.setCheckable(True)
-        self.cursor_a_btn.toggled.connect(lambda checked: self.toggle_cursor(1, checked))
-        self.cursor_b_btn.toggled.connect(lambda checked: self.toggle_cursor(2, checked))
-        self.controls_layout.addWidget(self.cursor_a_btn)
-        self.controls_layout.addWidget(self.cursor_b_btn)
-
-        self.controls_layout.addWidget(QLabel("Signals:"))
-
-        self.signal_checkboxes = {}
-        self.signal_scroll = QScrollArea()
-        self.signal_scroll_widget = QWidget()
-        self.signal_scroll_layout = QVBoxLayout(self.signal_scroll_widget)
-        self.signal_scroll.setWidget(self.signal_scroll_widget)
-        self.signal_scroll.setWidgetResizable(True)
-        self.controls_layout.addWidget(self.signal_scroll)
-
-        self.statusBar()
-
-        self.cursor1 = pg.InfiniteLine(angle=90, movable=True, pen="m")
-        self.cursor2 = pg.InfiniteLine(angle=90, movable=True, pen="c")
+        self.cursor1 = pg.InfiniteLine(angle=90, movable=True, pen='m')
+        self.cursor2 = pg.InfiniteLine(angle=90, movable=True, pen='c')
         self.cursor1.setVisible(False)
         self.cursor2.setVisible(False)
+
+        self.cursor_info_window = CursorInfoDialog(self)
+
+        self._init_ui()
+
+    def _init_ui(self):
+        splitter = QSplitter(Qt.Horizontal)
+        self.setCentralWidget(splitter)
+
+        self.plot_widget = pg.PlotWidget(axisItems={'bottom': DateAxisItem()})
+        self.plot_widget.showGrid(x=True, y=True)
         self.plot_widget.addItem(self.cursor1)
         self.plot_widget.addItem(self.cursor2)
+        splitter.addWidget(self.plot_widget)
 
-        self.cursor1.sigPositionChanged.connect(self.update_cursors)
-        self.cursor2.sigPositionChanged.connect(self.update_cursors)
+        control_panel = QWidget()
+        control_layout = QVBoxLayout(control_panel)
+        splitter.addWidget(control_panel)
+
+        open_btn = QPushButton("Open CSV...")
+        open_btn.clicked.connect(self.open_csv)
+        control_layout.addWidget(open_btn)
+
+        self.grid_cb = QCheckBox("Show Grid")
+        self.grid_cb.setChecked(True)
+        self.grid_cb.stateChanged.connect(lambda s: self.plot_widget.showGrid(x=s, y=s))
+        control_layout.addWidget(self.grid_cb)
+
+        self.cursor_a_btn = QCheckBox("Toggle Cursor A")
+        self.cursor_b_btn = QCheckBox("Toggle Cursor B")
+        self.cursor_a_btn.stateChanged.connect(lambda s: self.toggle_cursor(self.cursor1, s))
+        self.cursor_b_btn.stateChanged.connect(lambda s: self.toggle_cursor(self.cursor2, s))
+        control_layout.addWidget(self.cursor_a_btn)
+        control_layout.addWidget(self.cursor_b_btn)
+
+        control_layout.addWidget(QLabel("Signals:"))
+        self.signal_scroll = QScrollArea()
+        self.signal_scroll.setWidgetResizable(True)
+        self.signal_widget = QWidget()
+        self.signal_layout = QVBoxLayout(self.signal_widget)
+        self.signal_scroll.setWidget(self.signal_widget)
+        control_layout.addWidget(self.signal_scroll)
+
+        self.status = QStatusBar()
+        self.setStatusBar(self.status)
+
+        self.cursor1.sigPositionChanged.connect(self.update_cursor_status)
+        self.cursor2.sigPositionChanged.connect(self.update_cursor_status)
+
+    def toggle_cursor(self, cursor, state):
+        cursor.setVisible(bool(state))
+        if state and self.data_time is not None:
+            mid = self.data_time[len(self.data_time) // 2]
+            cursor.setPos(mid)
+        self.update_cursor_status()
 
     def open_csv(self):
-        """Open a CSV file and load signals."""
         file_path, _ = QFileDialog.getOpenFileName(self, "Open CSV File", "", "CSV Files (*.csv)")
         if not file_path:
             return
 
-        self.time, self.signals = parse_csv_file(file_path)
+        print(f"Loading file: {file_path}")
+
+        try:
+            self.data_time, self.data_signals = parse_csv_file(file_path)
+        except Exception as e:
+            print(f"Failed to load file: {e}")
+            return
+
         self.plot_widget.clear()
-        self.plot_widget.addLegend()
-        self.curves = {}
-        self._refresh_signal_list()
+        self.plot_widget.addItem(self.cursor1)
+        self.plot_widget.addItem(self.cursor2)
+        self.plotted_curves.clear()
 
-    def _refresh_signal_list(self):
-        """Display checkboxes for all available signals."""
-        # Clear old
-        for i in reversed(range(self.signal_scroll_layout.count())):
-            self.signal_scroll_layout.itemAt(i).widget().deleteLater()
+        for i in reversed(range(self.signal_layout.count())):
+            self.signal_layout.itemAt(i).widget().deleteLater()
 
-        for name in self.signals:
+        for name in self.data_signals:
             cb = QCheckBox(name)
-            cb.setChecked(True)
-            cb.stateChanged.connect(self.toggle_signal)
-            self.signal_scroll_layout.addWidget(cb)
-            self.signal_checkboxes[name] = cb
-            self._plot_signal(name)
+            cb.setChecked(False)
+            cb.stateChanged.connect(self.update_signal_plot)
+            self.signal_layout.addWidget(cb)
 
-    def _plot_signal(self, name):
-        """Plot a signal line."""
-        curve = self.plot_widget.plot(self.time, self.signals[name], name=name)
-        self.curves[name] = curve
+        print(f"Loaded {len(self.data_signals)} signals.")
 
-    def toggle_signal(self):
-        """Show or hide signal based on checkbox state."""
-        cb = self.sender()
-        name = cb.text()
-        if cb.isChecked():
-            if name not in self.curves:
-                self._plot_signal(name)
-            else:
-                self.curves[name].show()
+    def update_signal_plot(self):
+        sender = self.sender()
+        name = sender.text()
+
+        if sender.isChecked():
+            curve = self.plot_widget.plot(self.data_time, self.data_signals[name], name=name)
+            self.plotted_curves[name] = curve
+            print(f"Plotted signal: {name}")
         else:
-            if name in self.curves:
-                self.curves[name].hide()
+            if name in self.plotted_curves:
+                self.plot_widget.removeItem(self.plotted_curves[name])
+                del self.plotted_curves[name]
+                print(f"Removed signal: {name}")
 
-    def toggle_grid(self, state):
-        """Toggle background grid."""
-        self.plot_widget.showGrid(x=bool(state), y=bool(state))
+    def update_cursor_status(self):
+        t1 = self.cursor1.value() if self.cursor1.isVisible() else None
+        t2 = self.cursor2.value() if self.cursor2.isVisible() else None
 
-    def change_yscale(self, mode):
-        """Change Y-axis scaling mode."""
-        vb = self.plot_widget.getViewBox()
-        if mode == "Auto":
-            vb.enableAutoRange(axis="y", enable=True)
-        elif mode == "Full Range":
-            ymin = min(np.min(sig) for sig in self.signals.values())
-            ymax = max(np.max(sig) for sig in self.signals.values())
-            vb.setYRange(ymin, ymax)
+        fmt = lambda t: datetime.datetime.fromtimestamp(t).strftime("%H:%M:%S.%f")[:-3] if t else "--"
+        str1 = fmt(t1)
+        str2 = fmt(t2)
 
-    def toggle_cursor(self, index, show):
-        """Show or hide cursor line."""
-        cursor = self.cursor1 if index == 1 else self.cursor2
-        cursor.setVisible(show)
-        if show:
-            cursor.setPos(self.time[len(self.time) // 2])
-
-    def update_cursors(self):
-        """Update cursor status info."""
-        if self.cursor1.isVisible():
-            t1 = self.cursor1.value()
-            y1 = get_signal_values_at_time(self.time, self.signals, t1)
-        else:
-            t1 = y1 = None
-
-        if self.cursor2.isVisible():
-            t2 = self.cursor2.value()
-            y2 = get_signal_values_at_time(self.time, self.signals, t2)
-        else:
-            t2 = y2 = None
-
-        status = ""
-        if t1:
-            status += f"Cursor A: {t1:.2f}s "
+        status = f"Cursor A: {str1}"
         if t2:
-            status += f"| Cursor B: {t2:.2f}s "
-        if t1 and t2:
-            status += f"| Δt: {abs(t2 - t1):.2f}s"
+            status += f" | Cursor B: {str2}"
+            status += f" | Δt: {abs(t2 - t1):.3f}s" if t1 else ""
+        self.status.showMessage(status)
+        print(status)
 
-        self.statusBar().showMessage(status)
+        if self.cursor1.isVisible() or self.cursor2.isVisible():
+            values_a = self.get_values_at(t1) if t1 else {}
+            values_b = self.get_values_at(t2) if t2 else {}
+            self.cursor_info_window.update_data(str1, str2, values_a, values_b)
+            self.cursor_info_window.show()
+        else:
+            self.cursor_info_window.hide()
+
+    def get_values_at(self, timestamp):
+        idx = find_nearest_index(self.data_time, timestamp)
+        return {k: v[idx] for k, v in self.data_signals.items() if k in self.plotted_curves}
