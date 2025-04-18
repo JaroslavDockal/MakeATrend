@@ -1,94 +1,39 @@
+"""
+Main GUI implementation of the CSV Signal Viewer.
+"""
+
 from PySide6.QtWidgets import (
-    QMainWindow, QFileDialog, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QCheckBox, QScrollArea, QSplitter, QStatusBar,
-    QDialog, QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
-    QColorDialog, QSpinBox
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
+    QLabel, QCheckBox, QScrollArea, QSplitter, QStatusBar,
+    QComboBox, QColorDialog, QSpinBox, QFileDialog
 )
 from PySide6.QtCore import Qt
 import pyqtgraph as pg
 from pyqtgraph import DateAxisItem
-from utils import parse_csv_file, find_nearest_index
+
 import datetime
+from utils import parse_csv_file, find_nearest_index
+from cursor_info import CursorInfoDialog
+from crosshair import Crosshair
 import numpy as np
-import csv
 
-
-class CursorInfoDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Cursor Information")
-        self.resize(700, 400)
-        self.layout = QVBoxLayout(self)
-        self.header_label = QLabel("Cursor Info")
-        self.layout.addWidget(self.header_label)
-        self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["Signal", "A", "B", "Δ", "Δ/s"])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.layout.addWidget(self.table)
-        self.export_btn = QPushButton("Export to CSV")
-        self.export_btn.clicked.connect(self.export_to_csv)
-        self.layout.addWidget(self.export_btn)
-        self._export_data = []
-
-    def update_data(self, time_a, time_b, values_a, values_b):
-        self.header_label.setText(
-            f"Cursor A: {time_a}    Cursor B: {time_b}    Δt: {self.calc_time_delta(time_a, time_b)}"
-        )
-        try:
-            fmt = "%H:%M:%S.%f"
-            t1 = datetime.datetime.strptime(time_a, fmt)
-            t2 = datetime.datetime.strptime(time_b, fmt)
-            delta_t = (t2 - t1).total_seconds()
-        except:
-            delta_t = None
-
-        keys = sorted(set(values_a.keys()) | set(values_b.keys()))
-        self.table.setRowCount(len(keys))
-        self._export_data = []
-
-        for i, key in enumerate(keys):
-            a_val = values_a.get(key, np.nan)
-            b_val = values_b.get(key, np.nan)
-            delta = b_val - a_val if not (np.isnan(a_val) or np.isnan(b_val)) else np.nan
-            delta_per_sec = delta / delta_t if delta_t and not np.isnan(delta) else np.nan
-            self.table.setItem(i, 0, QTableWidgetItem(str(key)))
-            self.table.setItem(i, 1, QTableWidgetItem(f"{a_val:.3f}" if not np.isnan(a_val) else "-"))
-            self.table.setItem(i, 2, QTableWidgetItem(f"{b_val:.3f}" if not np.isnan(b_val) else "-"))
-            self.table.setItem(i, 3, QTableWidgetItem(f"{delta:.3f}" if not np.isnan(delta) else "-"))
-            self.table.setItem(i, 4, QTableWidgetItem(f"{delta_per_sec:.3f}" if not np.isnan(delta_per_sec) else "-"))
-
-            self._export_data.append([
-                key,
-                f"{a_val:.3f}" if not np.isnan(a_val) else "",
-                f"{b_val:.3f}" if not np.isnan(b_val) else "",
-                f"{delta:.3f}" if not np.isnan(delta) else "",
-                f"{delta_per_sec:.3f}" if not np.isnan(delta_per_sec) else ""
-            ])
-
-    def export_to_csv(self):
-        fname, _ = QFileDialog.getSaveFileName(self, "Save CSV", "cursor_values.csv", "CSV files (*.csv)")
-        if fname:
-            with open(fname, "w", newline="") as f:
-                writer = csv.writer(f)
-                writer.writerow(["Signal", "A", "B", "Δ", "Δ/s"])
-                writer.writerows(self._export_data)
-
-    def calc_time_delta(self, t1_str, t2_str):
-        try:
-            fmt = "%H:%M:%S.%f"
-            t1 = datetime.datetime.strptime(t1_str, fmt)
-            t2 = datetime.datetime.strptime(t2_str, fmt)
-            delta = abs((t2 - t1).total_seconds())
-            return f"{delta:.3f} s"
-        except:
-            return "-"
-
-    def showEvent(self, event):
-        self.move(self.pos())
-        super().showEvent(event)
 
 class SignalViewer(QMainWindow):
+    """
+    Main application window for signal plotting and interaction.
+
+    Attributes:
+        data_time (np.ndarray): Time axis values.
+        data_signals (dict): Dictionary of signal arrays.
+        curves (dict): Active plotted curves.
+        signal_axis_map (dict): Mapping of axis -> list of signal names.
+        signal_styles (dict): Mapping of signal name -> (axis, color, width).
+        viewboxes (dict): Mapping of axis -> ViewBox.
+        axis_labels (dict): Mapping of axis -> AxisItem.
+        signal_widgets (dict): Mapping of signal name -> UI widgets.
+        complex_mode (bool): Whether advanced UI controls are shown.
+    """
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("CSV Signal Viewer")
@@ -107,17 +52,36 @@ class SignalViewer(QMainWindow):
         self.init_ui()
 
     def init_ui(self):
+        """
+        Initializes the user interface of the application.
+        Sets up the plot area, control panel, and interactive elements.
+        """
         splitter = QSplitter(Qt.Horizontal)
         self.setCentralWidget(splitter)
 
-        # Plot
+        # === Plot Setup ===
         date_axis = DateAxisItem(orientation='bottom')
         self.plot_widget = pg.PlotWidget(axisItems={'bottom': date_axis})
         self.plot_widget.showGrid(x=True, y=True)
         self.main_view = self.plot_widget.getViewBox()
-        splitter.addWidget(self.plot_widget)
 
-        # ViewBoxes: only Left and Right
+        # --- Wrap plot in a container to allow overlaying widgets ---
+        plot_container = QWidget()
+        plot_layout = QVBoxLayout(plot_container)
+        plot_layout.setContentsMargins(0, 0, 0, 0)
+        plot_layout.addWidget(self.plot_widget)
+
+        # --- Button to reopen hidden panel ---
+        self.show_panel_btn = QPushButton("☰", plot_container)
+        self.show_panel_btn.setFixedSize(30, 30)
+        self.show_panel_btn.setStyleSheet("background-color: gray; color: white; font-weight: bold;")
+        self.show_panel_btn.move(10, 10)
+        self.show_panel_btn.clicked.connect(lambda: self.toggle_panel_btn.setChecked(True))
+        self.show_panel_btn.hide()  # initially hidden
+
+        splitter.addWidget(plot_container)
+
+        # === Y-Axes (Left and Right) ===
         self.viewboxes = {
             'Left': self.main_view,
             'Right': pg.ViewBox()
@@ -125,10 +89,10 @@ class SignalViewer(QMainWindow):
         self.plot_widget.scene().addItem(self.viewboxes['Right'])
         self.viewboxes['Right'].setXLink(self.main_view)
 
-        self.signal_axis_map = {'Left': [], 'Right': []}
+        self.signal_axis_map = {k: [] for k in self.viewboxes}
         self.axis_labels = {
             'Left': self.plot_widget.getAxis('left'),
-            'Right': self.plot_widget.getAxis('right'),
+            'Right': self.plot_widget.getAxis('right')
         }
         self.plot_widget.showAxis('right')
         self.axis_labels['Right'].linkToView(self.viewboxes['Right'])
@@ -140,20 +104,42 @@ class SignalViewer(QMainWindow):
 
         self.main_view.sigResized.connect(sync_views)
 
-        # Control Panel
-        control_panel = QWidget()
-        splitter.addWidget(control_panel)
-        layout = QVBoxLayout(control_panel)
+        # === Control Panel ===
+        self.control_panel = QWidget()
+        splitter.addWidget(self.control_panel)
+        layout = QVBoxLayout(self.control_panel)
 
+        # --- File load ---
         load_btn = QPushButton("Load CSV...")
         load_btn.clicked.connect(self.load_csv)
         layout.addWidget(load_btn)
 
+        # --- Complex (advanced plotting) mode ---
         self.toggle_mode_btn = QPushButton("Complicated Mode")
         self.toggle_mode_btn.setCheckable(True)
         self.toggle_mode_btn.toggled.connect(self.toggle_complex_mode)
         layout.addWidget(self.toggle_mode_btn)
 
+        # --- Toggle panel visibility ---
+        self.toggle_panel_btn = QPushButton("Toggle Panel")
+        self.toggle_panel_btn.setCheckable(True)
+        self.toggle_panel_btn.setChecked(True)
+        self.toggle_panel_btn.toggled.connect(self.toggle_right_panel)
+        layout.addWidget(self.toggle_panel_btn)
+
+        # --- Docking cursor info panel ---
+        self.toggle_cursor_mode = QPushButton("Dock Cursor Info")
+        self.toggle_cursor_mode.setCheckable(True)
+        self.toggle_cursor_mode.setChecked(False)
+        self.toggle_cursor_mode.toggled.connect(self.toggle_cursor_info_mode)
+        layout.addWidget(self.toggle_cursor_mode)
+
+        # --- Crosshair toggle ---
+        self.toggle_crosshair_chk = QCheckBox("Show Crosshair")
+        self.toggle_crosshair_chk.toggled.connect(self.toggle_crosshair)
+        layout.addWidget(self.toggle_crosshair_chk)
+
+        # --- Cursors A/B ---
         self.cursor_a_chk = QCheckBox("Show Cursor A")
         self.cursor_b_chk = QCheckBox("Show Cursor B")
         self.cursor_a_chk.toggled.connect(lambda s: self.toggle_cursor(self.cursor_a, s))
@@ -161,6 +147,7 @@ class SignalViewer(QMainWindow):
         layout.addWidget(self.cursor_a_chk)
         layout.addWidget(self.cursor_b_chk)
 
+        # --- Signal selection area ---
         layout.addWidget(QLabel("Signals:"))
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -169,6 +156,7 @@ class SignalViewer(QMainWindow):
         self.scroll_layout = QVBoxLayout(self.scroll_content)
         layout.addWidget(self.scroll)
 
+        # === Plot Items ===
         self.cursor_a = pg.InfiniteLine(angle=90, movable=True, pen='m')
         self.cursor_b = pg.InfiniteLine(angle=90, movable=True, pen='c')
         self.cursor_a.setVisible(False)
@@ -179,24 +167,23 @@ class SignalViewer(QMainWindow):
         self.cursor_a.sigPositionChanged.connect(self.update_cursor_info)
         self.cursor_b.sigPositionChanged.connect(self.update_cursor_info)
 
+        # === Info and status ===
         self.cursor_info = CursorInfoDialog(self)
+        self.crosshair = Crosshair(self.main_view)
         self.setStatusBar(QStatusBar())
 
-    def toggle_complex_mode(self, state):
-        self.complex_mode = state
-        for widgets in self.signal_widgets.values():
-            widgets['axis'].setVisible(state)
-            widgets['color_btn'].setVisible(state)
-            widgets['width'].setVisible(state)
-
     def load_csv(self):
+        """
+        Opens a file dialog, parses selected CSV file, and populates signals.
+        """
         path, _ = QFileDialog.getOpenFileName(self, "Open CSV", "", "CSV Files (*.csv)")
         if not path:
             return
+
         try:
             time_arr, signals = parse_csv_file(path)
         except Exception as e:
-            print(f"Failed to load: {e}")
+            print(f"Failed to load CSV: {e}")
             return
 
         self.data_time = time_arr
@@ -204,62 +191,78 @@ class SignalViewer(QMainWindow):
         self.clear_signals()
 
         for name in signals:
-            row = QWidget()
-            row_layout = QHBoxLayout(row)
-            row_layout.setContentsMargins(0, 0, 0, 0)
-
-            cb = QCheckBox(name)
-            cb.stateChanged.connect(self.toggle_signal)
-
-            axis_cb = QComboBox()
-            axis_cb.addItems(['Left', 'Right'])
-            axis_cb.setVisible(False)
-
-            color_btn = QPushButton("Color")
-            color_btn.setStyleSheet("background-color: white")
-            color_btn.clicked.connect(lambda _, b=color_btn: self.pick_color(b))
-            color_btn.setVisible(False)
-
-            width_spin = QSpinBox()
-            width_spin.setRange(1, 10)
-            width_spin.setValue(2)
-            width_spin.setVisible(False)
-
-            row_layout.addWidget(cb)
-            row_layout.addWidget(axis_cb)
-            row_layout.addWidget(color_btn)
-            row_layout.addWidget(width_spin)
-
+            row = self.build_signal_row(name)
             self.scroll_layout.addWidget(row)
 
-            self.signal_widgets[name] = {
-                'checkbox': cb,
-                'axis': axis_cb,
-                'color_btn': color_btn,
-                'width': width_spin
-            }
+    def build_signal_row(self, name):
+        """
+        Constructs UI row for a given signal.
+
+        Args:
+            name (str): Name of the signal.
+
+        Returns:
+            QWidget: The row widget.
+        """
+        row = QWidget()
+        row_layout = QHBoxLayout(row)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+
+        cb = QCheckBox(name)
+        cb.stateChanged.connect(self.toggle_signal)
+
+        axis_cb = QComboBox()
+        axis_cb.addItems(['Left', 'Right'])
+        axis_cb.setVisible(False)
+
+        color_btn = QPushButton("Color")
+        color_btn.setStyleSheet("background-color: white")
+        color_btn.clicked.connect(lambda _, b=color_btn: self.pick_color(b))
+        color_btn.setVisible(False)
+
+        width_spin = QSpinBox()
+        width_spin.setRange(1, 10)
+        width_spin.setValue(2)
+        width_spin.setVisible(False)
+
+        row_layout.addWidget(cb)
+        row_layout.addWidget(axis_cb)
+        row_layout.addWidget(color_btn)
+        row_layout.addWidget(width_spin)
+
+        self.signal_widgets[name] = {
+            'checkbox': cb,
+            'axis': axis_cb,
+            'color_btn': color_btn,
+            'width': width_spin
+        }
+
+        return row
 
     def clear_signals(self):
+        """
+        Removes all signal plots and resets widgets.
+        """
         for curve in self.curves.values():
             for vb in self.viewboxes.values():
                 vb.removeItem(curve)
+
         self.curves.clear()
-        self.signal_axis_map = {'Left': [], 'Right': []}
+        self.signal_axis_map = {k: [] for k in self.viewboxes}
         self.signal_styles.clear()
 
         for i in reversed(range(self.scroll_layout.count())):
             widget = self.scroll_layout.itemAt(i).widget()
             if widget:
                 widget.setParent(None)
+
         self.signal_widgets.clear()
         self.update_axis_labels()
 
-    def pick_color(self, btn):
-        color = QColorDialog.getColor()
-        if color.isValid():
-            btn.setStyleSheet(f"background-color: {color.name()}")
-
     def toggle_signal(self):
+        """
+        Handles toggle (check/uncheck) of signal visibility.
+        """
         cb = self.sender()
         for name, widgets in self.signal_widgets.items():
             if widgets['checkbox'] == cb:
@@ -280,24 +283,60 @@ class SignalViewer(QMainWindow):
                     )
                     self.viewboxes[axis].addItem(curve)
                     self.curves[name] = curve
-                    self.signal_axis_map.setdefault(axis, []).append(name)
+                    self.signal_axis_map[axis].append(name)
                     self.signal_styles[name] = (axis, color, width)
                 else:
                     curve = self.curves.pop(name, None)
                     if curve:
-                        self.viewboxes[self.signal_styles[name][0]].removeItem(curve)
-                        self.signal_axis_map[self.signal_styles[name][0]].remove(name)
+                        axis = self.signal_styles[name][0]
+                        self.viewboxes[axis].removeItem(curve)
+                        self.signal_axis_map[axis].remove(name)
                         del self.signal_styles[name]
+
                 self.update_axis_labels()
                 break
 
     def update_axis_labels(self):
+        """
+        Updates the Y-axis labels with names of plotted signals.
+        """
         for axis, label in self.axis_labels.items():
             names = self.signal_axis_map.get(axis, [])
             short_names = [n.split("[")[0] for n in names]
             label.setLabel(text=", ".join(short_names) if short_names else axis)
 
+    def pick_color(self, btn):
+        """
+        Opens color dialog to select line color.
+
+        Args:
+            btn (QPushButton): The button to apply color to.
+        """
+        color = QColorDialog.getColor()
+        if color.isValid():
+            btn.setStyleSheet(f"background-color: {color.name()}")
+
+    def toggle_complex_mode(self, state):
+        """
+        Enables or disables advanced plotting controls.
+
+        Args:
+            state (bool): True to enable advanced options.
+        """
+        self.complex_mode = state
+        for widgets in self.signal_widgets.values():
+            widgets['axis'].setVisible(state)
+            widgets['color_btn'].setVisible(state)
+            widgets['width'].setVisible(state)
+
     def toggle_cursor(self, cursor, state):
+        """
+        Shows or hides a specific vertical cursor line.
+
+        Args:
+            cursor (pg.InfiniteLine): The cursor line.
+            state (bool): Visibility flag.
+        """
         cursor.setVisible(state)
         if state and self.data_time is not None:
             cursor.setPos(self.data_time[len(self.data_time) // 2])
@@ -305,19 +344,64 @@ class SignalViewer(QMainWindow):
         self.update_cursor_info()
 
     def update_cursor_info(self):
+        """
+        Refreshes the floating or docked cursor data panel.
+        """
         if not self.cursor_info.isVisible():
             return
         t_a = self.cursor_a.value()
         t_b = self.cursor_b.value()
+
         fmt = "%H:%M:%S.%f"
         try:
             s_a = datetime.datetime.fromtimestamp(t_a).strftime(fmt)[:-3]
             s_b = datetime.datetime.fromtimestamp(t_b).strftime(fmt)[:-3]
-        except:
+        except Exception:
             s_a, s_b = "-", "-"
+
         def get_vals(t):
             idx = find_nearest_index(self.data_time, t)
             return {k: self.data_signals[k][idx] for k in self.curves}
+
         v_a = get_vals(t_a)
         v_b = get_vals(t_b)
         self.cursor_info.update_data(s_a, s_b, v_a, v_b)
+
+    def toggle_right_panel(self, visible):
+        """
+        Show/hide the entire control panel.
+
+        Args:
+            visible (bool): Whether to show the panel.
+        """
+        self.control_panel.setVisible(visible)
+        self.show_panel_btn.setVisible(not visible)
+
+    def toggle_cursor_info_mode(self, docked):
+        """
+        Moves cursor info to control panel or keeps it in its own window.
+
+        Args:
+            docked (bool): If True, docks the info panel.
+        """
+        if docked:
+            for i in reversed(range(self.scroll_layout.count())):
+                widget = self.scroll_layout.itemAt(i).widget()
+                if widget:
+                    widget.setParent(None)
+            self.scroll_layout.addWidget(self.cursor_info)
+        else:
+            self.scroll_layout.removeWidget(self.cursor_info)
+            self.cursor_info.setParent(None)
+            for name in self.signal_widgets:
+                row = self.build_signal_row(name)
+                self.scroll_layout.addWidget(row)
+
+    def toggle_crosshair(self, state):
+        """
+        Toggles the crosshair visibility.
+
+        Args:
+            state (bool): True to show, False to hide.
+        """
+        self.crosshair.toggle(state)
