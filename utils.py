@@ -1,38 +1,84 @@
 """
-Utility functions for CSV parsing and signal time processing.
+utils.py
+
+Utility functions for parsing CSV data and supporting the signal viewer.
 """
+
 import pandas as pd
 import numpy as np
+import warnings
 
-
-def parse_csv_file(file_path):
+def parse_csv_file(path: str):
     """
-    Parses a CSV file with 'Date' and 'Time' columns into timestamps and signals.
+    Parses a CSV file and returns timestamp array and signal data.
+
+    Args:
+        path (str): Path to the CSV file.
 
     Returns:
-        time_stamps (np.ndarray): Timestamps in Unix time (float seconds).
-        signals (dict): Dictionary of signal_name -> np.ndarray of float values.
+        tuple:
+            - np.ndarray: Array of datetime timestamps as float seconds.
+            - dict[str, np.ndarray]: Dictionary of signal name to signal values.
+
+    Raises:
+        ValueError: If timestamp cannot be parsed or signals are missing.
     """
-    df = pd.read_csv(file_path, sep=';', decimal=',', engine='python')
-    df['Timestamp'] = pd.to_datetime(
-        df['Date'] + ' ' + df['Time'],
-        format='%Y-%m-%d %H:%M:%S,%f',
-        errors='coerce'
-    )
-    df.drop(columns=['Date', 'Time'], inplace=True)
+    try:
+        df = pd.read_csv(path, sep=';', engine='python')
+    except Exception as e:
+        raise ValueError(f"Failed to read CSV: {e}")
+
+    # === Parse timestamp ===
+    if 'Date' in df.columns and 'Time' in df.columns:
+        df['Timestamp'] = pd.to_datetime(
+            df['Date'] + ' ' + df['Time'].str.replace(',', '.', regex=False),
+            format='%Y-%m-%d %H:%M:%S.%f',
+            errors='coerce'
+        )
+    else:
+        raise ValueError("CSV must contain 'Date' and 'Time' columns.")
+
+    if df['Timestamp'].isnull().all():
+        raise ValueError("All timestamps failed to parse.")
+
     df.dropna(subset=['Timestamp'], inplace=True)
+    timestamps = df['Timestamp'].astype(np.int64) / 1e9
+    timestamps = timestamps.to_numpy()
 
-    df['UnixTime'] = df['Timestamp'].astype('int64') // 10**9
-    time_stamps = df['UnixTime'].to_numpy(dtype=float)
+    # === Parse signals ===
+    signal_cols = [col for col in df.columns if col not in ('Date', 'Time', 'Timestamp')]
+    signals = {}
+    skipped = []
 
-    df.drop(columns=['Timestamp', 'UnixTime'], inplace=True)
-    df.columns = df.columns.str.strip()
+    for col in signal_cols:
+        # Replace commas with dots and force string to convert properly
+        cleaned = df[col].astype(str).str.replace(',', '.', regex=False)
+        numeric = pd.to_numeric(cleaned, errors='coerce')
+        if numeric.isnull().all():
+            skipped.append(col)
+        else:
+            signals[col] = numeric.to_numpy(dtype=np.float32)
 
-    signals = {col: df[col].astype(float).to_numpy() for col in df.columns}
-    return time_stamps, signals
+    if not signals:
+        raise ValueError("All signal columns failed to convert.")
+
+    if skipped:
+        for col in skipped:
+            warnings.warn(f"Column '{col}' could not be converted to float and was skipped.")
+
+    return timestamps, signals
 
 
-def find_nearest_index(array, value):
-    idx = np.searchsorted(array, value, side="left")
-    idx = np.clip(idx, 0, len(array) - 1)
+def find_nearest_index(array: np.ndarray, value: float) -> int:
+    """
+    Finds the index of the closest value in an array.
+
+    Args:
+        array (np.ndarray): The array to search.
+        value (float): The value to find the closest match to.
+
+    Returns:
+        int: Index of the closest value in the array.
+    """
+    idx = (np.abs(array - value)).argmin()
     return idx

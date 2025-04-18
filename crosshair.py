@@ -1,58 +1,65 @@
 """
-Crosshair overlay logic for displaying X and Y axis values in the plot.
+Crosshair overlay for the signal plot.
+Displays interactive vertical and horizontal lines with labels at mouse position.
 """
 
-from PySide6.QtCore import Qt
 import pyqtgraph as pg
+from PySide6.QtCore import Qt
+from datetime import datetime
 
 
 class Crosshair:
     """
-    Class managing crosshair overlay in a PyQtGraph ViewBox.
+    Class representing an interactive crosshair that shows position labels.
 
     Attributes:
-        viewbox (pg.ViewBox): The plot area viewbox.
-        enabled (bool): Whether crosshair is active.
+        viewbox (pg.ViewBox): The plot viewbox where the crosshair is drawn.
+        enabled (bool): Whether the crosshair is currently active.
     """
 
-    def __init__(self, viewbox):
+    def __init__(self, viewbox: pg.ViewBox):
         """
-        Initializes the Crosshair object.
+        Initializes the crosshair overlay.
 
         Args:
-            viewbox (pg.ViewBox): ViewBox to overlay crosshair on.
+            viewbox (pg.ViewBox): The ViewBox to attach the crosshair to.
         """
         self.viewbox = viewbox
-        self.vline = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen((150, 150, 150), style=Qt.DashLine))
-        self.hline = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen((150, 150, 150), style=Qt.DashLine))
+        self.enabled = False
+
+        # Vertical and horizontal dashed lines
+        self.vline = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen((200, 200, 200), style=Qt.DashLine))
+        self.hline = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen((200, 200, 200), style=Qt.DashLine))
         self.viewbox.addItem(self.vline, ignoreBounds=True)
         self.viewbox.addItem(self.hline, ignoreBounds=True)
 
-        self.proxy = pg.SignalProxy(self.viewbox.scene().sigMouseMoved, rateLimit=60, slot=self.mouse_moved)
-
+        # Text labels for X and Y positions
         self.label_x = pg.TextItem(anchor=(1, 1), color=(200, 200, 200))
-        self.label_y = pg.TextItem(anchor=(1, 0), color=(200, 200, 200))
+        self.label_y = pg.TextItem(anchor=(0, 0), color=(200, 200, 200))
+        self.label_y.setText("")  # init empty
         self.viewbox.addItem(self.label_x)
         self.viewbox.addItem(self.label_y)
 
-        self.enabled = False
-        self.last_pos = None
+        # Signal proxy for mouse movement
+        self.proxy = pg.SignalProxy(
+            self.viewbox.scene().sigMouseMoved,
+            rateLimit=60,
+            slot=self.mouse_moved
+        )
+
         self.hide()
 
-    def toggle(self, state):
+    def toggle(self, state: bool):
         """
-        Enables or disables the crosshair.
+        Enable or disable the crosshair.
 
         Args:
             state (bool): True to enable, False to disable.
         """
         self.enabled = state
+        self.viewbox.setMouseEnabled(x=not state, y=not state)
         if state:
-            self.last_pos = self.viewbox.mapSceneToView(
-                self.viewbox.mapToScene(self.viewbox.width() // 2, self.viewbox.height() // 2)
-            )
             self.show()
-            self.update_crosshair()
         else:
             self.hide()
 
@@ -72,40 +79,38 @@ class Crosshair:
 
     def mouse_moved(self, evt):
         """
-        Handler for mouse movement events.
+        Callback for mouse movement over the plot area.
 
         Args:
-            evt (tuple): PyQtGraph mouse move event.
+            evt: Event with scene position info.
         """
         if not self.enabled:
             return
+
         pos = evt[0]
-        if self.viewbox.sceneBoundingRect().contains(pos):
-            mouse_point = self.viewbox.mapSceneToView(pos)
-            x = mouse_point.x()
-            y = mouse_point.y()
-            self.vline.setPos(x)
-            self.hline.setPos(y)
-            self.label_x.setPos(x, self.viewbox.viewRange()[1][0])
-            self.label_y.setPos(self.viewbox.viewRange()[0][0], y)
-
-            try:
-                timestamp = datetime.datetime.fromtimestamp(x).strftime("%H:%M:%S.%f")[:-3]
-                self.label_x.setText(f"{timestamp}")
-            except Exception:
-                self.label_x.setText(f"{x:.2f}")
-
-            self.label_y.setText(f"{y:.2f}")
-
-    def update_crosshair(self):
-        """Updates the crosshair position and label values."""
-        if not self.enabled or not self.last_pos:
+        if not self.viewbox.sceneBoundingRect().contains(pos):
             return
-        x = self.last_pos.x()
-        y = self.last_pos.y()
+
+        # Map scene position to plot coordinates
+        mouse_point = self.viewbox.mapSceneToView(pos)
+        x = mouse_point.x()
+        y = mouse_point.y()
+
+        # Move crosshair lines
         self.vline.setPos(x)
         self.hline.setPos(y)
-        self.label_x.setPos(x, self.viewbox.viewRange()[1][0])
-        self.label_y.setPos(self.viewbox.viewRange()[0][0], y)
-        self.label_x.setText(f"X: {x:.2f}")
-        self.label_y.setText(f"Y: {y:.2f}")
+
+        # Update label positions
+        view_range = self.viewbox.viewRange()
+        self.label_x.setPos(x, view_range[1][0])  # bottom X
+        self.label_y.setPos(view_range[0][0], y)  # left Y
+
+        # Format X value as timestamp if possible
+        try:
+            time_str = datetime.fromtimestamp(x).strftime("%H:%M:%S.%f")[:-3]
+            self.label_x.setText(f"X: {time_str}")
+        except Exception:
+            self.label_x.setText("X: -")
+
+        # Format Y value as number
+        self.label_y.setText(f"Y: {y:.3f}")

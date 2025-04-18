@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 import pyqtgraph as pg
 from pyqtgraph import DateAxisItem
+from PySide6.QtWidgets import QGraphicsProxyWidget
 
 import datetime
 from utils import parse_csv_file, find_nearest_index
@@ -53,35 +54,50 @@ class SignalViewer(QMainWindow):
 
     def init_ui(self):
         """
-        Initializes the user interface of the application.
-        Sets up the plot area, control panel, and interactive elements.
+        Initializes the full UI of the application, including:
+        - Trend chart (pyqtgraph)
+        - Right control panel with signal selection and tools
+        - Floating ☰ button to reopen hidden panel
+        - Cursor lines and status bar
         """
         splitter = QSplitter(Qt.Horizontal)
         self.setCentralWidget(splitter)
 
-        # === Plot Setup ===
+        # === Plot Widget ===
         date_axis = DateAxisItem(orientation='bottom')
         self.plot_widget = pg.PlotWidget(axisItems={'bottom': date_axis})
         self.plot_widget.showGrid(x=True, y=True)
         self.main_view = self.plot_widget.getViewBox()
+        splitter.addWidget(self.plot_widget)
 
-        # --- Wrap plot in a container to allow overlaying widgets ---
-        plot_container = QWidget()
-        plot_layout = QVBoxLayout(plot_container)
-        plot_layout.setContentsMargins(0, 0, 0, 0)
-        plot_layout.addWidget(self.plot_widget)
+        # === Control Panel (pravá část) ===
+        self.control_panel = QWidget()
+        splitter.addWidget(self.control_panel)
 
-        # --- Button to reopen hidden panel ---
-        self.show_panel_btn = QPushButton("☰", plot_container)
+        # Poměr rozložení mezi grafem a panelem
+        splitter.setStretchFactor(0, 4)
+        splitter.setStretchFactor(1, 1)
+
+        # === Floating ☰ button (top-right corner of plot) ===
+        self.show_panel_btn = QPushButton("☰")
         self.show_panel_btn.setFixedSize(30, 30)
-        self.show_panel_btn.setStyleSheet("background-color: gray; color: white; font-weight: bold;")
-        self.show_panel_btn.move(10, 10)
+        self.show_panel_btn.setStyleSheet("background-color: gray; color: white; font-weight: bold; border: none;")
         self.show_panel_btn.clicked.connect(lambda: self.toggle_panel_btn.setChecked(True))
-        self.show_panel_btn.hide()  # initially hidden
 
-        splitter.addWidget(plot_container)
+        self.proxy_btn = QGraphicsProxyWidget()
+        self.proxy_btn.setWidget(self.show_panel_btn)
+        self.plot_widget.scene().addItem(self.proxy_btn)
 
-        # === Y-Axes (Left and Right) ===
+        def update_button_pos():
+            # Posuň tlačítko doprava nahoru
+            self.proxy_btn.setPos(self.plot_widget.width() - 40, 10)
+
+        self.plot_widget.resizeEvent = lambda event: (
+            pg.PlotWidget.resizeEvent(self.plot_widget, event), update_button_pos()
+        )
+        update_button_pos()
+
+        # === Y-Axes setup (Left + Right) ===
         self.viewboxes = {
             'Left': self.main_view,
             'Right': pg.ViewBox()
@@ -92,7 +108,7 @@ class SignalViewer(QMainWindow):
         self.signal_axis_map = {k: [] for k in self.viewboxes}
         self.axis_labels = {
             'Left': self.plot_widget.getAxis('left'),
-            'Right': self.plot_widget.getAxis('right')
+            'Right': self.plot_widget.getAxis('right'),
         }
         self.plot_widget.showAxis('right')
         self.axis_labels['Right'].linkToView(self.viewboxes['Right'])
@@ -104,42 +120,34 @@ class SignalViewer(QMainWindow):
 
         self.main_view.sigResized.connect(sync_views)
 
-        # === Control Panel ===
-        self.control_panel = QWidget()
-        splitter.addWidget(self.control_panel)
+        # === Control Panel Layout ===
         layout = QVBoxLayout(self.control_panel)
 
-        # --- File load ---
         load_btn = QPushButton("Load CSV...")
         load_btn.clicked.connect(self.load_csv)
         layout.addWidget(load_btn)
 
-        # --- Complex (advanced plotting) mode ---
         self.toggle_mode_btn = QPushButton("Complicated Mode")
         self.toggle_mode_btn.setCheckable(True)
         self.toggle_mode_btn.toggled.connect(self.toggle_complex_mode)
         layout.addWidget(self.toggle_mode_btn)
 
-        # --- Toggle panel visibility ---
         self.toggle_panel_btn = QPushButton("Toggle Panel")
         self.toggle_panel_btn.setCheckable(True)
         self.toggle_panel_btn.setChecked(True)
         self.toggle_panel_btn.toggled.connect(self.toggle_right_panel)
         layout.addWidget(self.toggle_panel_btn)
 
-        # --- Docking cursor info panel ---
         self.toggle_cursor_mode = QPushButton("Dock Cursor Info")
         self.toggle_cursor_mode.setCheckable(True)
         self.toggle_cursor_mode.setChecked(False)
         self.toggle_cursor_mode.toggled.connect(self.toggle_cursor_info_mode)
         layout.addWidget(self.toggle_cursor_mode)
 
-        # --- Crosshair toggle ---
         self.toggle_crosshair_chk = QCheckBox("Show Crosshair")
         self.toggle_crosshair_chk.toggled.connect(self.toggle_crosshair)
         layout.addWidget(self.toggle_crosshair_chk)
 
-        # --- Cursors A/B ---
         self.cursor_a_chk = QCheckBox("Show Cursor A")
         self.cursor_b_chk = QCheckBox("Show Cursor B")
         self.cursor_a_chk.toggled.connect(lambda s: self.toggle_cursor(self.cursor_a, s))
@@ -147,7 +155,6 @@ class SignalViewer(QMainWindow):
         layout.addWidget(self.cursor_a_chk)
         layout.addWidget(self.cursor_b_chk)
 
-        # --- Signal selection area ---
         layout.addWidget(QLabel("Signals:"))
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -156,7 +163,7 @@ class SignalViewer(QMainWindow):
         self.scroll_layout = QVBoxLayout(self.scroll_content)
         layout.addWidget(self.scroll)
 
-        # === Plot Items ===
+        # === Cursors and Status ===
         self.cursor_a = pg.InfiniteLine(angle=90, movable=True, pen='m')
         self.cursor_b = pg.InfiniteLine(angle=90, movable=True, pen='c')
         self.cursor_a.setVisible(False)
@@ -167,9 +174,9 @@ class SignalViewer(QMainWindow):
         self.cursor_a.sigPositionChanged.connect(self.update_cursor_info)
         self.cursor_b.sigPositionChanged.connect(self.update_cursor_info)
 
-        # === Info and status ===
         self.cursor_info = CursorInfoDialog(self)
         self.crosshair = Crosshair(self.main_view)
+
         self.setStatusBar(QStatusBar())
 
     def load_csv(self):
