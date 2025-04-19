@@ -4,13 +4,14 @@ Displays interactive vertical and horizontal lines with labels at mouse position
 """
 
 import pyqtgraph as pg
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from datetime import datetime
 
 
 class Crosshair:
     """
-    Class representing an interactive crosshair that shows position labels.
+    Class representing an interactive crosshair with labels for both X and Y axes,
+    including support for right Y-axis and timestamp formatting.
 
     Attributes:
         viewbox (pg.ViewBox): The plot viewbox where the crosshair is drawn.
@@ -27,18 +28,19 @@ class Crosshair:
         self.viewbox = viewbox
         self.enabled = False
 
-        # Vertical and horizontal dashed lines
+        # Dashed cross lines
         self.vline = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen((200, 200, 200), style=Qt.DashLine))
         self.hline = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen((200, 200, 200), style=Qt.DashLine))
         self.viewbox.addItem(self.vline, ignoreBounds=True)
         self.viewbox.addItem(self.hline, ignoreBounds=True)
 
-        # Text labels for X and Y positions
+        # Labels
         self.label_x = pg.TextItem(anchor=(1, 1), color=(200, 200, 200))
-        self.label_y = pg.TextItem(anchor=(0, 0), color=(200, 200, 200))
-        self.label_y.setText("")  # init empty
+        self.label_y_left = pg.TextItem(anchor=(0, 0), color=(200, 200, 200))
+        self.label_y_right = pg.TextItem(anchor=(1, 0), color=(200, 200, 200))
         self.viewbox.addItem(self.label_x)
-        self.viewbox.addItem(self.label_y)
+        self.viewbox.addItem(self.label_y_left)
+        self.viewbox.addItem(self.label_y_right)
 
         # Signal proxy for mouse movement
         self.proxy = pg.SignalProxy(
@@ -47,6 +49,9 @@ class Crosshair:
             slot=self.mouse_moved
         )
 
+        self.mouse_locked = False
+        self.local_tz = datetime.now().astimezone().tzinfo
+
         self.hide()
 
     def toggle(self, state: bool):
@@ -54,28 +59,32 @@ class Crosshair:
         Enable or disable the crosshair.
 
         Args:
-            state (bool): True to enable, False to disable.
+            state (bool): True = enable, False = disable
         """
         self.enabled = state
         self.viewbox.setMouseEnabled(x=not state, y=not state)
         if state:
+            # workaround to prevent zooming on first activation
+            QTimer.singleShot(0, lambda: self.viewbox.setMouseEnabled(x=False, y=False))
             self.show()
         else:
             self.hide()
 
     def show(self):
-        """Show all crosshair elements."""
+        """Show crosshair lines and labels."""
         self.vline.show()
         self.hline.show()
         self.label_x.show()
-        self.label_y.show()
+        self.label_y_left.show()
+        self.label_y_right.show()
 
     def hide(self):
         """Hide all crosshair elements."""
         self.vline.hide()
         self.hline.hide()
         self.label_x.hide()
-        self.label_y.hide()
+        self.label_y_left.hide()
+        self.label_y_right.hide()
 
     def mouse_moved(self, evt):
         """
@@ -91,26 +100,28 @@ class Crosshair:
         if not self.viewbox.sceneBoundingRect().contains(pos):
             return
 
-        # Map scene position to plot coordinates
+        # Prevent mouse-zooming (redundant fallback)
+        self.viewbox.setMouseEnabled(x=False, y=False)
+
         mouse_point = self.viewbox.mapSceneToView(pos)
         x = mouse_point.x()
         y = mouse_point.y()
 
-        # Move crosshair lines
+        # Move lines
         self.vline.setPos(x)
         self.hline.setPos(y)
 
-        # Update label positions
+        # Update labels
         view_range = self.viewbox.viewRange()
-        self.label_x.setPos(x, view_range[1][0])  # bottom X
-        self.label_y.setPos(view_range[0][0], y)  # left Y
+        self.label_x.setPos(x, view_range[1][0])
+        self.label_y_left.setPos(view_range[0][0], y)
+        self.label_y_right.setPos(view_range[0][1], y)
 
-        # Format X value as timestamp if possible
         try:
-            time_str = datetime.fromtimestamp(x).strftime("%H:%M:%S.%f")[:-3]
+            time_str = datetime.fromtimestamp(x, tz=self.local_tz).strftime("%H:%M:%S.%f")[:-3]
             self.label_x.setText(f"X: {time_str}")
         except Exception:
             self.label_x.setText("X: -")
 
-        # Format Y value as number
-        self.label_y.setText(f"Y: {y:.3f}")
+        self.label_y_left.setText(f"Y: {y:.3f}")
+        self.label_y_right.setText(f"Y: {y:.3f}")

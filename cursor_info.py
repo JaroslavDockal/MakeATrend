@@ -3,13 +3,14 @@ cursor_info.py
 
 Dialog window for displaying cursor values from a plotted CSV signal.
 Shows values at two cursors (A and B), their difference (Δ), and delta per second (Δ/s).
-Includes optional unit display.
+Always shows units if available (except [-] = no unit).
 """
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QTableWidget,
-    QTableWidgetItem, QPushButton, QHeaderView
+    QTableWidgetItem, QPushButton, QHeaderView, QFileDialog
 )
+from PySide6.QtCore import Qt
 import datetime
 import numpy as np
 import csv
@@ -19,22 +20,13 @@ import re
 class CursorInfoDialog(QDialog):
     """
     Dialog displaying signal values at cursors A and B, their difference (Δ), and Δ/s.
-    Optionally shows physical units parsed from signal names.
-
-    Attributes:
-        _export_data (list): Data stored for CSV export.
-        show_units (bool): Whether to show units in value cells.
+    Units are always shown if available (except [-] = no unit).
     """
 
     def __init__(self, parent=None):
-        """
-        Initialize the cursor information dialog.
-
-        Args:
-            parent (QWidget, optional): Parent widget.
-        """
         super().__init__(parent)
         self.setWindowTitle("Cursor Information")
+        self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
         self.resize(700, 400)
         self.layout = QVBoxLayout(self)
 
@@ -51,19 +43,13 @@ class CursorInfoDialog(QDialog):
         self.export_btn.clicked.connect(self.export_to_csv)
         self.layout.addWidget(self.export_btn)
 
-        self.unit_btn = QPushButton("Toggle Units")
-        self.unit_btn.setCheckable(True)
-        self.unit_btn.setChecked(False)
-        self.unit_btn.toggled.connect(self.refresh_unit_display)
-        self.layout.addWidget(self.unit_btn)
-
         self._export_data = []
         self._current_table_data = []
-        self.show_units = False
 
     def extract_unit(self, signal_name: str) -> str:
         """
         Extracts unit from a signal name using brackets (e.g., "Temp [°C]").
+        Returns an empty string if unit is '-' or missing.
 
         Args:
             signal_name (str): Full signal name.
@@ -73,8 +59,8 @@ class CursorInfoDialog(QDialog):
         """
         match = re.search(r"\[(.*?)\]", signal_name)
         if match:
-            unit = match.group(1)
-            return "" if unit.strip() == "-" else unit
+            unit = match.group(1).strip()
+            return "" if unit == "-" else unit
         return ""
 
     def clean_signal_name(self, signal_name: str) -> str:
@@ -88,16 +74,6 @@ class CursorInfoDialog(QDialog):
             str: Signal name without unit.
         """
         return re.sub(r"\s*\[.*?\]", "", signal_name)
-
-    def refresh_unit_display(self, state: bool):
-        """
-        Refresh the table to show/hide units in values.
-
-        Args:
-            state (bool): Toggle state of unit display.
-        """
-        self.show_units = state
-        self._rebuild_table()
 
     def update_data(self, time_a: str, time_b: str, values_a: dict, values_b: dict):
         """
@@ -146,6 +122,7 @@ class CursorInfoDialog(QDialog):
     def _rebuild_table(self):
         """
         (Re)build the table from stored _current_table_data.
+        Always shows units if available (except '[-]').
         """
         self.table.setRowCount(len(self._current_table_data))
         self._export_data = []
@@ -157,21 +134,21 @@ class CursorInfoDialog(QDialog):
                 formatted = f"{val:.3f}"
                 return f"{formatted} {unit}" if unit else formatted
 
-            u = row["unit"] if self.show_units else ""
-            u_per_s = f"{u}/s" if u else ""
+            unit = row["unit"]
+            unit_per_s = f"{unit}/s" if unit else ""
 
             self.table.setItem(i, 0, QTableWidgetItem(row["clean_key"]))
-            self.table.setItem(i, 1, QTableWidgetItem(format_val(row["a"], u)))
-            self.table.setItem(i, 2, QTableWidgetItem(format_val(row["b"], u)))
-            self.table.setItem(i, 3, QTableWidgetItem(format_val(row["delta"], u)))
-            self.table.setItem(i, 4, QTableWidgetItem(format_val(row["dps"], u_per_s)))
+            self.table.setItem(i, 1, QTableWidgetItem(format_val(row["a"], unit)))
+            self.table.setItem(i, 2, QTableWidgetItem(format_val(row["b"], unit)))
+            self.table.setItem(i, 3, QTableWidgetItem(format_val(row["delta"], unit)))
+            self.table.setItem(i, 4, QTableWidgetItem(format_val(row["dps"], unit_per_s)))
 
             self._export_data.append([
                 row["clean_key"],
-                format_val(row["a"], u),
-                format_val(row["b"], u),
-                format_val(row["delta"], u),
-                format_val(row["dps"], u_per_s)
+                format_val(row["a"], unit),
+                format_val(row["b"], unit),
+                format_val(row["delta"], unit),
+                format_val(row["dps"], unit_per_s)
             ])
 
     def export_to_csv(self):

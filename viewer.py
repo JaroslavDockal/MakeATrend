@@ -17,6 +17,7 @@ from utils import parse_csv_file, find_nearest_index
 from cursor_info import CursorInfoDialog
 from crosshair import Crosshair
 import numpy as np
+from custom_viewbox import CustomViewBox
 
 
 class SignalViewer(QMainWindow):
@@ -65,8 +66,10 @@ class SignalViewer(QMainWindow):
 
         # === Plot Widget ===
         date_axis = DateAxisItem(orientation='bottom')
-        self.plot_widget = pg.PlotWidget(axisItems={'bottom': date_axis})
+        self.custom_viewbox = CustomViewBox()
+        self.plot_widget = pg.PlotWidget(viewBox=self.custom_viewbox, axisItems={'bottom': date_axis})
         self.plot_widget.showGrid(x=True, y=True)
+        self.main_view = self.custom_viewbox
         self.main_view = self.plot_widget.getViewBox()
         splitter.addWidget(self.plot_widget)
 
@@ -154,6 +157,11 @@ class SignalViewer(QMainWindow):
         self.cursor_b_chk.toggled.connect(lambda s: self.toggle_cursor(self.cursor_b, s))
         layout.addWidget(self.cursor_a_chk)
         layout.addWidget(self.cursor_b_chk)
+
+        self.toggle_grid_chk = QCheckBox("Show Grid")
+        self.toggle_grid_chk.setChecked(True)
+        self.toggle_grid_chk.toggled.connect(self.toggle_grid)
+        layout.addWidget(self.toggle_grid_chk)
 
         layout.addWidget(QLabel("Signals:"))
         self.scroll = QScrollArea()
@@ -305,12 +313,18 @@ class SignalViewer(QMainWindow):
 
     def update_axis_labels(self):
         """
-        Updates the Y-axis labels with names of plotted signals.
+        Updates the Y-axis labels with colored names of plotted signals in one row.
         """
         for axis, label in self.axis_labels.items():
             names = self.signal_axis_map.get(axis, [])
-            short_names = [n.split("[")[0] for n in names]
-            label.setLabel(text=", ".join(short_names) if short_names else axis)
+            html_parts = []
+            for name in names:
+                base_name = name.split('[')[0].strip()
+                _, color, _ = self.signal_styles.get(name, (None, "#FFFFFF", 2))
+                html_parts.append(f'<span style="color:{color}">{base_name}</span>')
+            html_text = ", ".join(html_parts) if html_parts else axis
+            label.setLabel(text=html_text)
+
 
     def pick_color(self, btn):
         """
@@ -412,3 +426,12 @@ class SignalViewer(QMainWindow):
             state (bool): True to show, False to hide.
         """
         self.crosshair.toggle(state)
+
+    def toggle_grid(self, state: bool):
+        """
+        Enables/disables X and Y grid lines on the plot.
+
+        Args:
+            state (bool): True = show grid, False = hide.
+        """
+        self.plot_widget.showGrid(x=state, y=state)
