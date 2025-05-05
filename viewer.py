@@ -75,13 +75,14 @@ class SignalViewer(QMainWindow):
 
         # === Control Panel (pravá část) ===
         self.control_panel = QWidget()
+        self.control_panel.setMinimumWidth(320)
         splitter.addWidget(self.control_panel)
 
         # Poměr rozložení mezi grafem a panelem
         splitter.setStretchFactor(0, 4)
         splitter.setStretchFactor(1, 1)
 
-        # === Floating ☰ button (top-right corner of plot) ===
+        # === Floating ☰ button ===
         self.show_panel_btn = QPushButton("☰")
         self.show_panel_btn.setFixedSize(30, 30)
         self.show_panel_btn.setStyleSheet("background-color: gray; color: white; font-weight: bold; border: none;")
@@ -92,7 +93,6 @@ class SignalViewer(QMainWindow):
         self.plot_widget.scene().addItem(self.proxy_btn)
 
         def update_button_pos():
-            # Posuň tlačítko doprava nahoru
             self.proxy_btn.setPos(self.plot_widget.width() - 40, 10)
 
         self.plot_widget.resizeEvent = lambda event: (
@@ -126,6 +126,7 @@ class SignalViewer(QMainWindow):
         # === Control Panel Layout ===
         layout = QVBoxLayout(self.control_panel)
 
+        # --- Buttons ---
         load_btn = QPushButton("Load file...")
         load_btn.clicked.connect(self.load_csv)
         layout.addWidget(load_btn)
@@ -147,21 +148,39 @@ class SignalViewer(QMainWindow):
         self.toggle_cursor_mode.toggled.connect(self.toggle_cursor_info_mode)
         layout.addWidget(self.toggle_cursor_mode)
 
-        self.toggle_crosshair_chk = QCheckBox("Show Crosshair")
-        self.toggle_crosshair_chk.toggled.connect(self.toggle_crosshair)
-        layout.addWidget(self.toggle_crosshair_chk)
+        # === Grid layout for checkboxes ===
+        checkbox_container = QWidget()
+        checkbox_layout = QHBoxLayout(checkbox_container)
 
-        self.cursor_a_chk = QCheckBox("Show Cursor A")
-        self.cursor_b_chk = QCheckBox("Show Cursor B")
-        self.cursor_a_chk.toggled.connect(lambda s: self.toggle_cursor(self.cursor_a, s))
-        self.cursor_b_chk.toggled.connect(lambda s: self.toggle_cursor(self.cursor_b, s))
-        layout.addWidget(self.cursor_a_chk)
-        layout.addWidget(self.cursor_b_chk)
+        checkbox_container = QWidget()
+        checkbox_layout = QHBoxLayout(checkbox_container)
+
+        col1 = QVBoxLayout()
+        col2 = QVBoxLayout()
 
         self.toggle_grid_chk = QCheckBox("Show Grid")
         self.toggle_grid_chk.setChecked(True)
         self.toggle_grid_chk.toggled.connect(self.toggle_grid)
-        layout.addWidget(self.toggle_grid_chk)
+        col1.addWidget(self.toggle_grid_chk)
+
+        self.cursor_a_chk = QCheckBox("Show Cursor A")
+        self.cursor_a_chk.toggled.connect(lambda s: self.toggle_cursor(self.cursor_a, s))
+        col1.addWidget(self.cursor_a_chk)
+
+        self.toggle_crosshair_chk = QCheckBox("Show Crosshair")
+        self.toggle_crosshair_chk.toggled.connect(self.toggle_crosshair)
+        col2.addWidget(self.toggle_crosshair_chk)
+
+        self.cursor_info = CursorInfoDialog(self)  # Musí být zde před použitím
+        self.crosshair = Crosshair(self.main_view)
+
+        self.cursor_b_chk = QCheckBox("Show Cursor B")
+        self.cursor_b_chk.toggled.connect(lambda s: self.toggle_cursor(self.cursor_b, s))
+        col2.addWidget(self.cursor_b_chk)
+
+        checkbox_layout.addLayout(col1)
+        checkbox_layout.addLayout(col2)
+        layout.addWidget(checkbox_container)
 
         layout.addWidget(QLabel("Signals:"))
         self.scroll = QScrollArea()

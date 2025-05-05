@@ -45,7 +45,7 @@ class CursorInfoDialog(QDialog):
 
         # === NEW: toggle between normal and scientific format ===
         self._scientific_mode = False
-        self.toggle_format_btn = QPushButton("Toggle Format")
+        self.toggle_format_btn = QPushButton("Switch to Scientific Notation")
         self.toggle_format_btn.clicked.connect(self.toggle_format_mode)
         self.layout.addWidget(self.toggle_format_btn)
 
@@ -65,6 +65,10 @@ class CursorInfoDialog(QDialog):
             - Scientific: 1.200e-04
         """
         self._scientific_mode = not self._scientific_mode
+        if self._scientific_mode:
+            self.toggle_format_btn.setText("Switch to Noob Mode")
+        else:
+            self.toggle_format_btn.setText("Switch to Scientific Notation")
         self._rebuild_table()
 
     def extract_unit(self, signal_name: str) -> str:
