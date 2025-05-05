@@ -43,8 +43,29 @@ class CursorInfoDialog(QDialog):
         self.export_btn.clicked.connect(self.export_to_csv)
         self.layout.addWidget(self.export_btn)
 
+        # === NEW: toggle between normal and scientific format ===
+        self._scientific_mode = False
+        self.toggle_format_btn = QPushButton("Toggle Format")
+        self.toggle_format_btn.clicked.connect(self.toggle_format_mode)
+        self.layout.addWidget(self.toggle_format_btn)
+
         self._export_data = []
         self._current_table_data = []
+
+    def toggle_format_mode(self):
+        """
+        Toggles the numerical display format between fixed-point and scientific notation.
+
+        This affects how values are shown in the cursor info table for both absolute values
+        and calculated differences (Δ, Δ/s). When toggled, the table is rebuilt with the
+        new formatting applied.
+
+        Example formats:
+            - Fixed-point: 0.00012
+            - Scientific: 1.200e-04
+        """
+        self._scientific_mode = not self._scientific_mode
+        self._rebuild_table()
 
     def extract_unit(self, signal_name: str) -> str:
         """
@@ -131,7 +152,14 @@ class CursorInfoDialog(QDialog):
             def format_val(val, unit=""):
                 if np.isnan(val):
                     return "-"
-                formatted = f"{val:.3f}"
+                if self._scientific_mode:
+                    formatted = f"{val:.3e}"
+                else:
+                    abs_val = abs(val)
+                    if 0 < abs_val < 0.001:
+                        formatted = f"{val:.6f}"
+                    else:
+                        formatted = f"{val:.3f}"
                 return f"{formatted} {unit}" if unit else formatted
 
             unit = row["unit"]

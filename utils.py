@@ -95,7 +95,7 @@ def parse_csv_file(path: str):
 
 def parse_recorder_format(text: str):
     """
-    Parses a text file in the special "RECORDER VALUES" format.
+    Parses a text file in the special "Drive Window" format.
 
     Args:
         text (str): Full content of the file.
@@ -151,7 +151,7 @@ def parse_recorder_format(text: str):
 
     # Generate timestamps
     timestamps = [
-        (start_dt + timedelta(seconds=row[0] * interval_sec)).timestamp()
+        (start_dt - timedelta(seconds=row[0] * interval_sec)).timestamp()
         for row in data_lines
     ]
 
