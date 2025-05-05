@@ -13,7 +13,7 @@ from pyqtgraph import DateAxisItem
 from PySide6.QtWidgets import QGraphicsProxyWidget
 
 import datetime
-from utils import parse_csv_file, find_nearest_index
+from utils import parse_csv_or_recorder, find_nearest_index
 from cursor_info import CursorInfoDialog
 from crosshair import Crosshair
 import numpy as np
@@ -126,7 +126,7 @@ class SignalViewer(QMainWindow):
         # === Control Panel Layout ===
         layout = QVBoxLayout(self.control_panel)
 
-        load_btn = QPushButton("Load CSV...")
+        load_btn = QPushButton("Load file...")
         load_btn.clicked.connect(self.load_csv)
         layout.addWidget(load_btn)
 
@@ -191,12 +191,12 @@ class SignalViewer(QMainWindow):
         """
         Opens a file dialog, parses selected CSV file, and populates signals.
         """
-        path, _ = QFileDialog.getOpenFileName(self, "Open CSV", "", "CSV Files (*.csv)")
+        path, _ = QFileDialog.getOpenFileName(self, "Open Data File", "", "Data Files (*.csv *.txt)")
         if not path:
             return
 
         try:
-            time_arr, signals = parse_csv_file(path)
+            time_arr, signals = parse_csv_or_recorder(path)
         except Exception as e:
             print(f"Failed to load CSV: {e}")
             return
