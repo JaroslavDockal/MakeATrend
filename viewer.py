@@ -2,25 +2,26 @@
 Main GUI implementation of the CSV Signal Viewer.
 """
 
+import pyqtgraph as pg
+import numpy as np
+import re
+import datetime
+
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QCheckBox, QScrollArea, QSplitter, QStatusBar,
-    QComboBox, QColorDialog, QSpinBox, QFileDialog
+    QComboBox, QColorDialog, QSpinBox, QLineEdit, QDialog,
+    QGraphicsProxyWidget
 )
 from PySide6.QtCore import Qt
-import pyqtgraph as pg
 from pyqtgraph import DateAxisItem
-from PySide6.QtWidgets import QGraphicsProxyWidget
 
-import datetime
-from utils import parse_csv_or_recorder, find_nearest_index, is_digital_signal
+from utils import find_nearest_index, is_digital_signal
 from cursor_info import CursorInfoDialog
 from crosshair import Crosshair
-import numpy as np
 from custom_viewbox import CustomViewBox
-from PySide6.QtWidgets import QLineEdit, QDialog
 from virtual_signal_dialog import VirtualSignalDialog
-import re
+from loader import load_multiple_files, load_single_file
 
 class SignalViewer(QMainWindow):
     """
@@ -141,7 +142,7 @@ class SignalViewer(QMainWindow):
 
         # --- Buttons ---
         load_btn = QPushButton("Load file...")
-        load_btn.clicked.connect(self.load_csv)
+        load_btn.clicked.connect(lambda: self.load_data(multiple=False))
         layout.addWidget(load_btn)
 
         self.toggle_mode_btn = QPushButton("Complicated Mode")
@@ -227,28 +228,6 @@ class SignalViewer(QMainWindow):
         self.crosshair = Crosshair(self.main_view)
 
         self.setStatusBar(QStatusBar())
-
-    def load_csv(self):
-        """
-        Opens a file dialog, parses selected CSV file, and populates signals.
-        """
-        path, _ = QFileDialog.getOpenFileName(self, "Open Data File", "", "Data Files (*.csv *.txt)")
-        if not path:
-            return
-
-        try:
-            time_arr, signals = parse_csv_or_recorder(path)
-        except Exception as e:
-            print(f"Failed to load CSV: {e}")
-            return
-
-        self.data_time = time_arr
-        self.data_signals = signals
-        self.clear_signals()
-
-        for name in signals:
-            row = self.build_signal_row(name)
-            self.scroll_layout.addWidget(row)
 
     def build_signal_row(self, name):
         """
@@ -527,3 +506,23 @@ class SignalViewer(QMainWindow):
                 self.signal_widgets[name]['checkbox'].setChecked(True)
             except Exception as e:
                 print(f"Failed to compute virtual signal: {e}")
+
+    def load_data(self, multiple=False):
+        """
+        Loads one or more data files depending on the 'multiple' flag.
+        """
+        if multiple:
+            time_arr, signals = load_multiple_files()
+        else:
+            time_arr, signals = load_single_file()
+
+        if time_arr is None or not signals:
+            return
+
+        self.data_time = time_arr
+        self.data_signals = signals
+        self.clear_signals()
+
+        for name in signals:
+            row = self.build_signal_row(name)
+            self.scroll_layout.addWidget(row)
