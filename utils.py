@@ -183,20 +183,21 @@ def find_nearest_index(array: np.ndarray, value: float) -> int:
     idx = (np.abs(array - value)).argmin()
     return idx
 
+
 def is_digital_signal(arr: np.ndarray) -> bool:
     """
     Determines whether a signal is digital (boolean-like).
 
-    A signal is considered digital if it only contains values from:
-    - {'0', '1'}
-    - {'TRUE', 'FALSE'} (case-insensitive)
-    - Or a mix of both
+    A signal is considered digital if it only contains values like:
+    - 'TRUE' / 'FALSE' (case-insensitive)
+    - Not numeric 0/1, to avoid misclassification of analog signals
 
     Args:
-        arr (np.ndarray): Signal values.
+        arr (np.ndarray): Signal values (can be numeric or string).
 
     Returns:
-        bool: True if the signal looks like boolean data, False otherwise.
+        bool: True if the signal is clearly boolean (TRUE/FALSE), False otherwise.
     """
     unique_vals = set(str(v).strip().lower() for v in np.unique(arr) if str(v).strip())
-    return unique_vals.issubset({'0', '1', 'true', 'false'})
+    return unique_vals.issubset({'true', 'false'})
+

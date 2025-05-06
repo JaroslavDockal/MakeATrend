@@ -21,6 +21,7 @@ class CursorInfoDialog(QDialog):
     """
     Dialog displaying signal values at cursors A and B, their difference (Δ), and Δ/s.
     Units are always shown if available (except [-] = no unit).
+    Boolean signals are displayed as "On"/"Off", and Δ/Δs are hidden for them.
     """
 
     def __init__(self, parent=None):
@@ -43,7 +44,6 @@ class CursorInfoDialog(QDialog):
         self.export_btn.clicked.connect(self.export_to_csv)
         self.layout.addWidget(self.export_btn)
 
-        # === NEW: toggle between normal and scientific format ===
         self._scientific_mode = False
         self.toggle_format_btn = QPushButton("Switch to Scientific Notation")
         self.toggle_format_btn.clicked.connect(self.toggle_format_mode)
@@ -127,9 +127,16 @@ class CursorInfoDialog(QDialog):
         for key in keys:
             a_val = values_a.get(key, np.nan)
             b_val = values_b.get(key, np.nan)
-            delta = b_val - a_val if not (np.isnan(a_val) or np.isnan(b_val)) else np.nan
-            delta_per_sec = delta / delta_t if delta_t and not np.isnan(delta) else np.nan
             unit = self.extract_unit(key)
+
+            is_bool = self._is_boolean(a_val, b_val)
+
+            delta = None if is_bool else (
+                b_val - a_val if not (np.isnan(a_val) or np.isnan(b_val)) else np.nan
+            )
+            delta_per_sec = None if is_bool else (
+                delta / delta_t if delta_t and not np.isnan(delta) else np.nan
+            )
 
             table_data.append({
                 "key": key,
@@ -138,11 +145,49 @@ class CursorInfoDialog(QDialog):
                 "a": a_val,
                 "b": b_val,
                 "delta": delta,
-                "dps": delta_per_sec
+                "dps": delta_per_sec,
+                "bool": is_bool
             })
 
         self._current_table_data = table_data
         self._rebuild_table()
+
+    def _is_boolean(self, a_val, b_val) -> bool:
+        """
+        Detects if both values are textual booleans ('TRUE'/'FALSE').
+
+        Args:
+            a_val: Value at cursor A
+            b_val: Value at cursor B
+
+        Returns:
+            bool: True if both are 'TRUE' or 'FALSE'
+        """
+        valid = {"TRUE", "FALSE"}
+        try:
+            return str(a_val).strip().upper() in valid and str(b_val).strip().upper() in valid
+        except Exception:
+            return False
+
+    def _format_val(self, val, unit="", is_bool=False):
+        if val is None or str(val).strip() == "":
+            return "-"
+        if is_bool:
+            return "On" if str(val).strip().upper() == "TRUE" else "FALSE"
+        try:
+            val = float(val)
+        except Exception:
+            return str(val)
+
+        if self._scientific_mode:
+            formatted = f"{val:.3e}"
+        else:
+            abs_val = abs(val)
+            if 0 < abs_val < 0.001:
+                formatted = f"{val:.6f}"
+            else:
+                formatted = f"{val:.3f}"
+        return f"{formatted} {unit}" if unit else formatted
 
     def _rebuild_table(self):
         """
@@ -153,34 +198,22 @@ class CursorInfoDialog(QDialog):
         self._export_data = []
 
         for i, row in enumerate(self._current_table_data):
-            def format_val(val, unit=""):
-                if np.isnan(val):
-                    return "-"
-                if self._scientific_mode:
-                    formatted = f"{val:.3e}"
-                else:
-                    abs_val = abs(val)
-                    if 0 < abs_val < 0.001:
-                        formatted = f"{val:.6f}"
-                    else:
-                        formatted = f"{val:.3f}"
-                return f"{formatted} {unit}" if unit else formatted
-
             unit = row["unit"]
             unit_per_s = f"{unit}/s" if unit else ""
+            is_bool = row["bool"]
 
             self.table.setItem(i, 0, QTableWidgetItem(row["clean_key"]))
-            self.table.setItem(i, 1, QTableWidgetItem(format_val(row["a"], unit)))
-            self.table.setItem(i, 2, QTableWidgetItem(format_val(row["b"], unit)))
-            self.table.setItem(i, 3, QTableWidgetItem(format_val(row["delta"], unit)))
-            self.table.setItem(i, 4, QTableWidgetItem(format_val(row["dps"], unit_per_s)))
+            self.table.setItem(i, 1, QTableWidgetItem(self._format_val(row["a"], unit, is_bool)))
+            self.table.setItem(i, 2, QTableWidgetItem(self._format_val(row["b"], unit, is_bool)))
+            self.table.setItem(i, 3, QTableWidgetItem("-" if is_bool else self._format_val(row["delta"], unit)))
+            self.table.setItem(i, 4, QTableWidgetItem("-" if is_bool else self._format_val(row["dps"], unit_per_s)))
 
             self._export_data.append([
                 row["clean_key"],
-                format_val(row["a"], unit),
-                format_val(row["b"], unit),
-                format_val(row["delta"], unit),
-                format_val(row["dps"], unit_per_s)
+                self._format_val(row["a"], unit, is_bool),
+                self._format_val(row["b"], unit, is_bool),
+                "-" if is_bool else self._format_val(row["delta"], unit),
+                "-" if is_bool else self._format_val(row["dps"], unit_per_s)
             ])
 
     def export_to_csv(self):
