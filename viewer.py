@@ -18,7 +18,7 @@ from cursor_info import CursorInfoDialog
 from crosshair import Crosshair
 import numpy as np
 from custom_viewbox import CustomViewBox
-
+from PySide6.QtWidgets import QLineEdit
 
 class SignalViewer(QMainWindow):
     """
@@ -50,6 +50,7 @@ class SignalViewer(QMainWindow):
         self.axis_labels = {}
         self.signal_widgets = {}
         self.complex_mode = False
+        self.signal_filter_text = ""
 
         self.init_ui()
 
@@ -182,6 +183,11 @@ class SignalViewer(QMainWindow):
         checkbox_layout.addLayout(col2)
         layout.addWidget(checkbox_container)
 
+        self.filter_box = QLineEdit()
+        self.filter_box.setPlaceholderText("Filter signals...")
+        self.filter_box.textChanged.connect(self.apply_signal_filter)
+        layout.addWidget(self.filter_box)
+
         layout.addWidget(QLabel("Signals:"))
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -268,7 +274,8 @@ class SignalViewer(QMainWindow):
             'checkbox': cb,
             'axis': axis_cb,
             'color_btn': color_btn,
-            'width': width_spin
+            'width': width_spin,
+            'row': row
         }
 
         return row
@@ -454,3 +461,16 @@ class SignalViewer(QMainWindow):
             state (bool): True = show grid, False = hide.
         """
         self.plot_widget.showGrid(x=state, y=state)
+
+    def apply_signal_filter(self, text: str):
+        """
+        Filters signal rows in the panel based on user input.
+
+        Args:
+            text (str): Filter string (case-insensitive).
+        """
+        self.signal_filter_text = text.lower().strip()
+        for name, widgets in self.signal_widgets.items():
+            row_widget = widgets.get('row')
+            visible = self.signal_filter_text in name.lower()
+            row_widget.setVisible(visible)
