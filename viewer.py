@@ -13,7 +13,7 @@ from pyqtgraph import DateAxisItem
 from PySide6.QtWidgets import QGraphicsProxyWidget
 
 import datetime
-from utils import parse_csv_or_recorder, find_nearest_index
+from utils import parse_csv_or_recorder, find_nearest_index, is_digital_signal
 from cursor_info import CursorInfoDialog
 from crosshair import Crosshair
 import numpy as np
@@ -101,26 +101,36 @@ class SignalViewer(QMainWindow):
         )
         update_button_pos()
 
-        # === Y-Axes setup (Left + Right) ===
+        # === Y-Axes setup (Left + Right + Digital) ===
         self.viewboxes = {
             'Left': self.main_view,
-            'Right': pg.ViewBox()
+            'Right': pg.ViewBox(),
+            'Digital': pg.ViewBox()
         }
         self.plot_widget.scene().addItem(self.viewboxes['Right'])
+        self.plot_widget.scene().addItem(self.viewboxes['Digital'])
         self.viewboxes['Right'].setXLink(self.main_view)
+        self.viewboxes['Digital'].setXLink(self.main_view)
 
         self.signal_axis_map = {k: [] for k in self.viewboxes}
         self.axis_labels = {
             'Left': self.plot_widget.getAxis('left'),
             'Right': self.plot_widget.getAxis('right'),
+            'Digital': pg.AxisItem('right')
         }
+
         self.plot_widget.showAxis('right')
         self.axis_labels['Right'].linkToView(self.viewboxes['Right'])
+
+        self.plot_widget.getPlotItem().layout.addItem(self.axis_labels['Digital'], 2, 4)
+        self.axis_labels['Digital'].linkToView(self.viewboxes['Digital'])
 
         def sync_views():
             geom = self.main_view.sceneBoundingRect()
             self.viewboxes['Right'].setGeometry(geom)
+            self.viewboxes['Digital'].setGeometry(geom)
             self.viewboxes['Right'].linkedViewChanged(self.main_view, self.viewboxes['Right'].XAxis)
+            self.viewboxes['Digital'].linkedViewChanged(self.main_view, self.viewboxes['Digital'].XAxis)
 
         self.main_view.sigResized.connect(sync_views)
 
@@ -302,7 +312,8 @@ class SignalViewer(QMainWindow):
 
     def toggle_signal(self):
         """
-        Handles toggle (check/uncheck) of signal visibility.
+        Handles toggling of a signal. Adds or removes the signal from the plot.
+        Automatically assigns boolean signals to the Digital axis with step-style rendering.
         """
         cb = self.sender()
         for name, widgets in self.signal_widgets.items():
@@ -317,15 +328,23 @@ class SignalViewer(QMainWindow):
                         width = 2
                         axis = 'Left'
 
+                    # === Auto-detect digital signal ===
+                    if is_digital_signal(self.data_signals[name]):
+                        axis = 'Digital'
+                        style = dict(stepMode=True, width=3)
+                    else:
+                        style = dict(width=width)
+
+                    pen = pg.mkPen(color=color, **style)
                     curve = pg.PlotCurveItem(
                         x=self.data_time,
                         y=self.data_signals[name],
-                        pen=pg.mkPen(color=color, width=width)
+                        pen=pen
                     )
                     self.viewboxes[axis].addItem(curve)
                     self.curves[name] = curve
                     self.signal_axis_map[axis].append(name)
-                    self.signal_styles[name] = (axis, color, width)
+                    self.signal_styles[name] = (axis, color, style['width'])
                 else:
                     curve = self.curves.pop(name, None)
                     if curve:
@@ -333,7 +352,6 @@ class SignalViewer(QMainWindow):
                         self.viewboxes[axis].removeItem(curve)
                         self.signal_axis_map[axis].remove(name)
                         del self.signal_styles[name]
-
                 self.update_axis_labels()
                 break
 
