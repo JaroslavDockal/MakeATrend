@@ -18,7 +18,9 @@ from cursor_info import CursorInfoDialog
 from crosshair import Crosshair
 import numpy as np
 from custom_viewbox import CustomViewBox
-from PySide6.QtWidgets import QLineEdit
+from PySide6.QtWidgets import QLineEdit, QDialog
+from virtual_signal_dialog import VirtualSignalDialog
+import re
 
 class SignalViewer(QMainWindow):
     """
@@ -197,6 +199,10 @@ class SignalViewer(QMainWindow):
         self.filter_box.setPlaceholderText("Filter signals...")
         self.filter_box.textChanged.connect(self.apply_signal_filter)
         layout.addWidget(self.filter_box)
+
+        btn = QPushButton("Add virtual signal")
+        btn.clicked.connect(self.add_virtual_signal)
+        layout.addWidget(btn)
 
         layout.addWidget(QLabel("Signals:"))
         self.scroll = QScrollArea()
@@ -452,15 +458,15 @@ class SignalViewer(QMainWindow):
         if docked:
             for i in reversed(range(self.scroll_layout.count())):
                 widget = self.scroll_layout.itemAt(i).widget()
-                if widget:
+                if widget and widget != self.cursor_info:
                     widget.setParent(None)
             self.scroll_layout.addWidget(self.cursor_info)
         else:
             self.scroll_layout.removeWidget(self.cursor_info)
             self.cursor_info.setParent(None)
-            for name in self.signal_widgets:
-                row = self.build_signal_row(name)
-                self.scroll_layout.addWidget(row)
+
+            for name, widgets in self.signal_widgets.items():
+                self.scroll_layout.addWidget(widgets['row'])
 
     def toggle_crosshair(self, state):
         """
@@ -492,3 +498,32 @@ class SignalViewer(QMainWindow):
             row_widget = widgets.get('row')
             visible = self.signal_filter_text in name.lower()
             row_widget.setVisible(visible)
+
+    def add_virtual_signal(self):
+        """
+        Opens a dialog for creating a new virtual signal from an expression.
+        The user defines a name and an expression based on existing signals.
+        If the expression is valid, the new signal is added and plotted.
+        """
+        dialog = VirtualSignalDialog(list(self.data_signals.keys()), parent=self)
+        if dialog.exec() == QDialog.Accepted:
+            name, expression, mapping = dialog.get_result()
+            try:
+                # Replace aliases (G1, G2...) in expression with actual signal variable names
+                local_vars = {}
+                for alias, real_signal in mapping.items():
+                    safe_name = f"__{alias}__"
+                    expression = re.sub(rf'\b{alias}\b', safe_name, expression)
+                    local_vars[safe_name] = self.data_signals[real_signal]
+
+                result = eval(expression, {}, local_vars)
+
+                if not isinstance(result, np.ndarray):
+                    raise ValueError("Expression did not return an array.")
+
+                self.data_signals[name] = result
+                row = self.build_signal_row(name)
+                self.scroll_layout.addWidget(row)
+                self.signal_widgets[name]['checkbox'].setChecked(True)
+            except Exception as e:
+                print(f"Failed to compute virtual signal: {e}")
