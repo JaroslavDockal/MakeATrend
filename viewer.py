@@ -142,7 +142,7 @@ class SignalViewer(QMainWindow):
 
         # --- Buttons ---
         load_btn = QPushButton("Load file...")
-        load_btn.clicked.connect(lambda: self.load_data(multiple=False))
+        load_btn.clicked.connect(lambda: self.load_data(multiple=True))
         layout.addWidget(load_btn)
 
         self.toggle_mode_btn = QPushButton("Complicated Mode")
@@ -321,9 +321,10 @@ class SignalViewer(QMainWindow):
                         style = dict(width=width)
 
                     pen = pg.mkPen(color=color, **style)
+                    time_arr, value_arr = self.data_signals[name]
                     curve = pg.PlotCurveItem(
-                        x=self.data_time,
-                        y=self.data_signals[name],
+                        x=time_arr,
+                        y=value_arr,
                         pen=pen
                     )
                     self.viewboxes[axis].addItem(curve)
@@ -510,16 +511,16 @@ class SignalViewer(QMainWindow):
     def load_data(self, multiple=False):
         """
         Loads one or more data files depending on the 'multiple' flag.
+        Updates data_signals as dict[name] = (time, values).
         """
         if multiple:
-            time_arr, signals = load_multiple_files()
+            signals = load_multiple_files()
         else:
-            time_arr, signals = load_single_file()
+            signals = load_single_file()
 
-        if time_arr is None or not signals:
+        if not signals:
             return
 
-        self.data_time = time_arr
         self.data_signals = signals
         self.clear_signals()
 

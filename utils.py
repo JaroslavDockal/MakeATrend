@@ -31,8 +31,7 @@ def parse_csv_or_recorder(path: str):
     else:
         return parse_csv_file(path)
 
-
-def parse_csv_file(path: str):
+def parse_csv_file(path):
     """
     Parses a standard CSV file and returns timestamp array and signal data.
 
@@ -60,40 +59,28 @@ def parse_csv_file(path: str):
             errors='coerce'
         )
     else:
-        raise ValueError("CSV must contain 'Date' and 'Time' columns.")
-
-    if df['Timestamp'].isnull().all():
-        raise ValueError("All timestamps failed to parse.")
+        raise ValueError("Missing 'Date' and 'Time' columns.")
 
     df.dropna(subset=['Timestamp'], inplace=True)
     timestamps = df['Timestamp'].astype(np.int64) / 1e9
     timestamps = timestamps.to_numpy()
 
-    # === Parse signals ===
-    signal_cols = [col for col in df.columns if col not in ('Date', 'Time', 'Timestamp')]
     signals = {}
-    skipped = []
-
-    for col in signal_cols:
-        # Replace commas with dots and force string to convert properly
+    for col in df.columns:
+        if col in ('Date', 'Time', 'Timestamp'):
+            continue
         cleaned = df[col].astype(str).str.replace(',', '.', regex=False)
         numeric = pd.to_numeric(cleaned, errors='coerce')
-        if numeric.isnull().all():
-            skipped.append(col)
-        else:
+        if not numeric.isnull().all():
             signals[col] = numeric.to_numpy(dtype=np.float32)
 
     if not signals:
-        raise ValueError("All signal columns failed to convert.")
-
-    if skipped:
-        for col in skipped:
-            warnings.warn(f"Column '{col}' could not be converted to float and was skipped.")
+        raise ValueError("No signals could be parsed.")
 
     return timestamps, signals
 
 
-def parse_recorder_format(text: str):
+def parse_recorder_format(text):
     """
     Parses a text file in the special "Drive Window" format.
 
@@ -106,7 +93,7 @@ def parse_recorder_format(text: str):
             - dict[str, np.ndarray]: Dictionary of signal name -> values.
     """
     lines = text.strip().splitlines()
-    item_map = {}  # item number -> signal name
+    item_map = {}
     start_time_str = None
     interval_sec = None
     data_lines = []
@@ -116,60 +103,40 @@ def parse_recorder_format(text: str):
         if line.startswith("Item "):
             match = re.match(r"Item\s+(\d+)\s*=\s*(.+)", line)
             if match:
-                item_num = int(match.group(1))
-                item_name = match.group(2).strip()
-                item_map[item_num] = item_name
+                item_map[int(match.group(1))] = match.group(2).strip()
         elif "Time of Interval" in line:
-            parts = line.split(":", 1)
-            if len(parts) >= 2:
-                start_time_str = parts[1].strip()
+            start_time_str = line.split(":", 1)[1].strip()
         elif "Interval:" in line:
-            interval_match = re.search(r"([\d.]+)\s*sec", line)
-            if interval_match:
-                interval_sec = float(interval_match.group(1))
+            m = re.search(r"([\d.]+)\s*sec", line)
+            if m:
+                interval_sec = float(m.group(1))
         elif re.match(r"\s*\d+\s+", line):
             parts = re.split(r'\s+', line)
             try:
-                index = int(parts[0])
+                idx = int(parts[0])
                 values = [float(p.replace(',', '.')) for p in parts[1:]]
-                data_lines.append([index] + values)
+                data_lines.append([idx] + values)
             except ValueError:
                 continue
 
     if not (start_time_str and interval_sec and item_map and data_lines):
-        raise ValueError("Invalid recorder format: missing required information.")
+        raise ValueError("Invalid recorder format.")
 
-    # Normalize whitespaces in time string
-    cleaned_time = re.sub(r"\s+", " ", start_time_str.strip())
+    start_dt = datetime.strptime(start_time_str, "%y/%m/%d %H:%M:%S")
+    data_lines.sort(key=lambda row: row[0])
+    timestamps = [(start_dt - timedelta(seconds=row[0] * interval_sec)).timestamp() for row in data_lines]
 
-    try:
-        start_dt = datetime.strptime(cleaned_time, "%y/%m/%d %H:%M:%S")
-    except ValueError as e:
-        raise ValueError(f"Failed to parse start time '{cleaned_time}': {e}")
-
-    data_lines.sort(key=lambda row: row[0])  # sort by sample index ascending
-
-    # Generate timestamps
-    timestamps = [
-        (start_dt - timedelta(seconds=row[0] * interval_sec)).timestamp()
-        for row in data_lines
-    ]
-
-    # Parse signals
-    num_signals = len(data_lines[0]) - 1
     signals = {}
-
-    for i in range(num_signals):
-        signal_name = item_map.get(i + 1, f"Signal {i + 1}")
-        signals[signal_name] = [row[i + 1] if i + 1 < len(row) else np.nan for row in data_lines]
+    for i in range(len(data_lines[0]) - 1):
+        name = item_map.get(i + 1, f"Signal {i + 1}")
+        signals[name] = [row[i + 1] for row in data_lines]
 
     for name in signals:
         signals[name] = np.array(signals[name], dtype=np.float32)
 
     return np.array(timestamps, dtype=np.float64), signals
 
-
-def find_nearest_index(array: np.ndarray, value: float) -> int:
+def find_nearest_index(array, value):
     """
     Finds the index of the closest value in an array.
 
@@ -180,11 +147,9 @@ def find_nearest_index(array: np.ndarray, value: float) -> int:
     Returns:
         int: Index of the closest value in the array.
     """
-    idx = (np.abs(array - value)).argmin()
-    return idx
+    return (np.abs(array - value)).argmin()
 
-
-def is_digital_signal(arr: np.ndarray) -> bool:
+def is_digital_signal(arr):
     """
     Determines whether a signal is digital (boolean-like).
 
@@ -198,6 +163,5 @@ def is_digital_signal(arr: np.ndarray) -> bool:
     Returns:
         bool: True if the signal is clearly boolean (TRUE/FALSE), False otherwise.
     """
-    unique_vals = set(str(v).strip().lower() for v in np.unique(arr) if str(v).strip())
-    return unique_vals.issubset({'true', 'false'})
-
+    unique = set(str(v).strip().lower() for v in np.unique(arr))
+    return unique.issubset({'true', 'false'})

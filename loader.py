@@ -1,7 +1,7 @@
+# loader.py
 from utils import parse_csv_or_recorder
 import numpy as np
 from PySide6.QtWidgets import QFileDialog
-
 
 def load_single_file():
     """
@@ -12,14 +12,15 @@ def load_single_file():
     """
     path, _ = QFileDialog.getOpenFileName(None, "Open Data File", "", "Data Files (*.csv *.txt)")
     if not path:
-        return None, {}
+        return {}
 
     try:
-        return parse_csv_or_recorder(path)
+        time_arr, signals = parse_csv_or_recorder(path)
     except Exception as e:
         print(f"Failed to load CSV: {e}")
-        return None, {}
+        return {}
 
+    return {name: (time_arr, values) for name, values in signals.items()}
 
 def load_multiple_files():
     """
@@ -30,10 +31,9 @@ def load_multiple_files():
     """
     paths, _ = QFileDialog.getOpenFileNames(None, "Open Data Files", "", "Data Files (*.csv *.txt)")
     if not paths:
-        return None, {}
+        return {}
 
     all_signals = {}
-    ref_time = None
 
     for path in paths:
         try:
@@ -46,23 +46,17 @@ def load_multiple_files():
             if name not in all_signals:
                 all_signals[name] = [(time_arr, values)]
             else:
-                conflict = any(
-                    t1[0] <= time_arr[-1] and t1[-1] >= time_arr[0]
-                    for t1, _ in all_signals[name]
-                )
+                conflict = any(t1[0] <= time_arr[-1] and t1[-1] >= time_arr[0] for t1, _ in all_signals[name])
                 if conflict:
                     print(f"Warning: Signal '{name}' in {path} overlaps in time.")
                 else:
                     all_signals[name].append((time_arr, values))
 
-        if ref_time is None:
-            ref_time = time_arr
-
-    merged_signals = {}
+    result = {}
     for name, chunks in all_signals.items():
         times = np.concatenate([t for t, _ in chunks])
         values = np.concatenate([v for _, v in chunks])
         idx = np.argsort(times)
-        merged_signals[name] = values[idx]
+        result[name] = (times[idx], values[idx])
 
-    return ref_time, merged_signals
+    return result

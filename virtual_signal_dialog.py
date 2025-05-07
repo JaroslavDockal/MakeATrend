@@ -4,11 +4,10 @@ Dialog for defining virtual signals via expressions using aliases (e.g., G1 + G2
 
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QDialogButtonBox, QComboBox, QMessageBox, QWidget
+    QDialogButtonBox, QComboBox, QMessageBox
 )
 from PySide6.QtCore import Qt
 import re
-
 
 class VirtualSignalDialog(QDialog):
     """
@@ -58,13 +57,13 @@ class VirtualSignalDialog(QDialog):
         # Remove previous alias input widgets
         for i in reversed(range(self.alias_area.count())):
             item = self.alias_area.itemAt(i)
-            if item and item.layout():
-                while item.layout().count():
-                    child = item.layout().takeAt(0)
-                    if child.widget():
-                        child.widget().deleteLater()
-            elif item and item.widget():
-                item.widget().deleteLater()
+            if item:
+                w = item.layout()
+                if w:
+                    while w.count():
+                        c = w.takeAt(0).widget()
+                        if c:
+                            c.setParent(None)
 
         expression = self.expr_edit.text()
         aliases = sorted(set(re.findall(r"\b[A-Za-z_]\w*\b", expression)))
@@ -72,14 +71,13 @@ class VirtualSignalDialog(QDialog):
         self.alias_mapping.clear()
 
         for alias in aliases:
-            container = QWidget()
-            row = QHBoxLayout(container)
+            row = QHBoxLayout()
             label = QLabel(f"{alias} =")
             combo = QComboBox()
             combo.addItems(self.signal_names)
             row.addWidget(label)
             row.addWidget(combo)
-            self.alias_area.addWidget(container)
+            self.alias_area.addLayout(row)
             self.alias_mapping[alias] = combo
 
     def get_result(self):
