@@ -100,7 +100,7 @@ class CursorInfoDialog(QDialog):
         """
         return re.sub(r"\s*\[.*?\]", "", signal_name)
 
-    def update_data(self, time_a: str, time_b: str, values_a: dict, values_b: dict):
+    def update_data(self, time_a: str, time_b: str, values_a: dict, values_b: dict, has_a: bool, has_b: bool):
         """
         Update the table with new cursor values.
 
@@ -109,47 +109,51 @@ class CursorInfoDialog(QDialog):
             time_b (str): Timestamp for cursor B.
             values_a (dict): Signal values at cursor A.
             values_b (dict): Signal values at cursor B.
+            has_a (bool): Whether cursor A is active.
+            has_b (bool): Whether cursor B is active.
         """
-        self.header_label.setText(
-            f"Cursor A: {time_a}    Cursor B: {time_b}    Δt: {self.calc_time_delta(time_a, time_b)}"
-        )
-
-        try:
-            t1 = datetime.datetime.strptime(time_a, "%H:%M:%S.%f")
-            t2 = datetime.datetime.strptime(time_b, "%H:%M:%S.%f")
-            delta_t = (t2 - t1).total_seconds()
-        except Exception:
+        if has_a and has_b:
+            delta_t = self._calc_delta_seconds(time_a, time_b)
+            delta_t_str = self.calc_time_delta(time_a, time_b)
+        else:
             delta_t = None
+            delta_t_str = "-"
+
+        self.header_label.setText(f"Cursor A: {time_a}    Cursor B: {time_b}    Δt: {delta_t_str}")
+        self._current_table_data = []
 
         keys = sorted(set(values_a.keys()) | set(values_b.keys()))
-        table_data = []
 
         for key in keys:
-            a_val = values_a.get(key, np.nan)
-            b_val = values_b.get(key, np.nan)
+            a_val = values_a.get(key, "")
+            b_val = values_b.get(key, "")
             unit = self.extract_unit(key)
-
+            clean_name = self.clean_signal_name(key)
             is_bool = self._is_boolean(a_val, b_val)
 
-            delta = None if is_bool else (
-                b_val - a_val if not (np.isnan(a_val) or np.isnan(b_val)) else np.nan
-            )
-            delta_per_sec = None if is_bool else (
-                delta / delta_t if delta_t and not np.isnan(delta) else np.nan
-            )
+            delta = None
+            dps = None
 
-            table_data.append({
-                "key": key,
-                "clean_key": self.clean_signal_name(key),
+            try:
+                a = float(a_val)
+                b = float(b_val)
+                if has_a and has_b and not is_bool:
+                    delta = b - a
+                    if delta_t and delta_t > 0:
+                        dps = delta / delta_t
+            except:
+                pass
+
+            self._current_table_data.append({
+                "key": clean_name,
                 "unit": unit,
                 "a": a_val,
                 "b": b_val,
                 "delta": delta,
-                "dps": delta_per_sec,
+                "dps": dps,
                 "bool": is_bool
             })
 
-        self._current_table_data = table_data
         self._rebuild_table()
 
     def _is_boolean(self, a_val, b_val) -> bool:
@@ -202,18 +206,20 @@ class CursorInfoDialog(QDialog):
             unit_per_s = f"{unit}/s" if unit else ""
             is_bool = row["bool"]
 
-            self.table.setItem(i, 0, QTableWidgetItem(row["clean_key"]))
+            self.table.setItem(i, 0, QTableWidgetItem(row["key"]))
             self.table.setItem(i, 1, QTableWidgetItem(self._format_val(row["a"], unit, is_bool)))
             self.table.setItem(i, 2, QTableWidgetItem(self._format_val(row["b"], unit, is_bool)))
-            self.table.setItem(i, 3, QTableWidgetItem("-" if is_bool else self._format_val(row["delta"], unit)))
-            self.table.setItem(i, 4, QTableWidgetItem("-" if is_bool else self._format_val(row["dps"], unit_per_s)))
+            self.table.setItem(i, 3, QTableWidgetItem(
+                "-" if is_bool or row["delta"] is None else self._format_val(row["delta"], unit)))
+            self.table.setItem(i, 4, QTableWidgetItem(
+                "-" if is_bool or row["dps"] is None else self._format_val(row["dps"], unit_per_s)))
 
             self._export_data.append([
-                row["clean_key"],
+                row["key"],
                 self._format_val(row["a"], unit, is_bool),
                 self._format_val(row["b"], unit, is_bool),
-                "-" if is_bool else self._format_val(row["delta"], unit),
-                "-" if is_bool else self._format_val(row["dps"], unit_per_s)
+                "-" if is_bool or row["delta"] is None else self._format_val(row["delta"], unit),
+                "-" if is_bool or row["dps"] is None else self._format_val(row["dps"], unit_per_s),
             ])
 
     def export_to_csv(self):
@@ -225,7 +231,14 @@ class CursorInfoDialog(QDialog):
             with open(fname, "w", newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow(["Signal", "A", "B", "Δ", "Δ/s"])
-                writer.writerows(self._export_data)
+                for row in self._current_table_data:
+                    writer.writerow([
+                        row["key"],
+                        row["a"],
+                        row["b"],
+                        "-" if row["bool"] else row["delta"],
+                        "-" if row["bool"] else row["dps"]
+                    ])
 
     def calc_time_delta(self, t1_str: str, t2_str: str) -> str:
         """
@@ -253,3 +266,12 @@ class CursorInfoDialog(QDialog):
         """
         self.move(self.pos())
         super().showEvent(event)
+
+    def _calc_delta_seconds(self, t1_str, t2_str) -> float:
+        try:
+            fmt = "%H:%M:%S.%f"
+            t1 = datetime.datetime.strptime(t1_str, fmt)
+            t2 = datetime.datetime.strptime(t2_str, fmt)
+            return abs((t2 - t1).total_seconds())
+        except:
+            return None

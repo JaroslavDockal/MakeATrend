@@ -70,11 +70,11 @@ class SignalViewer(QMainWindow):
 
         # === Plot Widget ===
         date_axis = DateAxisItem(orientation='bottom')
-        self.custom_viewbox = CustomViewBox()
-        self.plot_widget = pg.PlotWidget(viewBox=self.custom_viewbox, axisItems={'bottom': date_axis})
+        date_axis = DateAxisItem(orientation='bottom')
+        self.plot_widget = pg.PlotWidget(axisItems={'bottom': date_axis})
+        self.custom_viewbox = self.plot_widget.getViewBox()
         self.plot_widget.showGrid(x=True, y=True)
         self.main_view = self.custom_viewbox
-        self.main_view = self.plot_widget.getViewBox()
         splitter.addWidget(self.plot_widget)
 
         # === Control Panel (pravá část) ===
@@ -389,34 +389,60 @@ class SignalViewer(QMainWindow):
             state (bool): Visibility flag.
         """
         cursor.setVisible(state)
-        if state and self.data_time is not None:
-            cursor.setPos(self.data_time[len(self.data_time) // 2])
+        if state:
+            try:
+                mid = None
+                for name, (time_arr, _) in self.data_signals.items():
+                    if time_arr is not None and len(time_arr) > 0:
+                        mid = time_arr[len(time_arr) // 2]
+                        break
+                if mid is not None:
+                    cursor.setPos(mid)
+            except Exception:
+                pass
+
         self.cursor_info.setVisible(self.cursor_a.isVisible() or self.cursor_b.isVisible())
         self.update_cursor_info()
 
     def update_cursor_info(self):
         """
         Refreshes the floating or docked cursor data panel.
+        Now supports individual time vectors for each signal.
         """
         if not self.cursor_info.isVisible():
             return
-        t_a = self.cursor_a.value()
-        t_b = self.cursor_b.value()
+
+        has_a = self.cursor_a.isVisible()
+        has_b = self.cursor_b.isVisible()
+
+        t_a = self.cursor_a.value() if has_a else None
+        t_b = self.cursor_b.value() if has_b else None
 
         fmt = "%H:%M:%S.%f"
         try:
-            s_a = datetime.datetime.fromtimestamp(t_a).strftime(fmt)[:-3]
-            s_b = datetime.datetime.fromtimestamp(t_b).strftime(fmt)[:-3]
+            s_a = datetime.datetime.fromtimestamp(t_a).strftime(fmt)[:-3] if has_a else "-"
+            s_b = datetime.datetime.fromtimestamp(t_b).strftime(fmt)[:-3] if has_b else "-"
         except Exception:
             s_a, s_b = "-", "-"
 
-        def get_vals(t):
-            idx = find_nearest_index(self.data_time, t)
-            return {k: self.data_signals[k][idx] for k in self.curves}
+        def get_vals(t, enabled):
+            vals = {}
+            if not enabled:
+                return vals
+            for name in self.curves:
+                time_arr, value_arr = self.data_signals.get(name, (None, None))
+                if time_arr is not None and value_arr is not None:
+                    try:
+                        idx = find_nearest_index(time_arr, t)
+                        vals[name] = value_arr[idx]
+                    except Exception:
+                        vals[name] = np.nan
+            return vals
 
-        v_a = get_vals(t_a)
-        v_b = get_vals(t_b)
-        self.cursor_info.update_data(s_a, s_b, v_a, v_b)
+        v_a = get_vals(t_a, has_a)
+        v_b = get_vals(t_b, has_b)
+
+        self.cursor_info.update_data(s_a, s_b, v_a, v_b, has_a, has_b)
 
     def toggle_right_panel(self, visible):
         """
