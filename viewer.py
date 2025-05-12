@@ -6,12 +6,13 @@ import pyqtgraph as pg
 import numpy as np
 import re
 import datetime
+import os
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QCheckBox, QScrollArea, QSplitter, QStatusBar,
     QComboBox, QColorDialog, QSpinBox, QLineEdit, QDialog,
-    QGraphicsProxyWidget
+    QFileDialog, QGraphicsProxyWidget
 )
 from PySide6.QtCore import Qt
 from pyqtgraph import DateAxisItem
@@ -44,7 +45,6 @@ class SignalViewer(QMainWindow):
         self.setWindowTitle("CSV Signal Viewer")
         self.resize(1400, 800)
 
-        self.data_time = None
         self.data_signals = {}
         self.curves = {}
         self.signal_axis_map = {}
@@ -68,25 +68,27 @@ class SignalViewer(QMainWindow):
         splitter = QSplitter(Qt.Horizontal)
         self.setCentralWidget(splitter)
 
-        # === Plot Widget ===
+        # Plot Widget
         date_axis = DateAxisItem(orientation='bottom')
-        date_axis = DateAxisItem(orientation='bottom')
-        self.plot_widget = pg.PlotWidget(axisItems={'bottom': date_axis})
-        self.custom_viewbox = self.plot_widget.getViewBox()
+        self.custom_viewbox = CustomViewBox()
+        self.plot_widget = pg.PlotWidget(viewBox=self.custom_viewbox, axisItems={'bottom': date_axis})
+        self.plot_widget.showAxis('bottom')
         self.plot_widget.showGrid(x=True, y=True)
         self.main_view = self.custom_viewbox
         splitter.addWidget(self.plot_widget)
 
-        # === Control Panel (pravá část) ===
+        # Control Panel
         self.control_panel = QWidget()
         self.control_panel.setMinimumWidth(320)
         splitter.addWidget(self.control_panel)
-
-        # Poměr rozložení mezi grafem a panelem
         splitter.setStretchFactor(0, 4)
         splitter.setStretchFactor(1, 1)
 
-        # === Floating ☰ button ===
+        self.setup_floating_button()
+        self.setup_axes()
+        self.setup_control_panel()
+
+    def setup_floating_button(self):
         self.show_panel_btn = QPushButton("☰")
         self.show_panel_btn.setFixedSize(30, 30)
         self.show_panel_btn.setStyleSheet("background-color: gray; color: white; font-weight: bold; border: none;")
@@ -104,7 +106,7 @@ class SignalViewer(QMainWindow):
         )
         update_button_pos()
 
-        # === Y-Axes setup (Left + Right + Digital) ===
+    def setup_axes(self):
         self.viewboxes = {
             'Left': self.main_view,
             'Right': pg.ViewBox(),
@@ -124,7 +126,6 @@ class SignalViewer(QMainWindow):
 
         self.plot_widget.showAxis('right')
         self.axis_labels['Right'].linkToView(self.viewboxes['Right'])
-
         self.plot_widget.getPlotItem().layout.addItem(self.axis_labels['Digital'], 2, 4)
         self.axis_labels['Digital'].linkToView(self.viewboxes['Digital'])
 
@@ -137,13 +138,16 @@ class SignalViewer(QMainWindow):
 
         self.main_view.sigResized.connect(sync_views)
 
-        # === Control Panel Layout ===
+    def setup_control_panel(self):
         layout = QVBoxLayout(self.control_panel)
 
-        # --- Buttons ---
-        load_btn = QPushButton("Load file...")
+        load_btn = QPushButton("Load Files")
         load_btn.clicked.connect(lambda: self.load_data(multiple=True))
         layout.addWidget(load_btn)
+
+        export_btn = QPushButton("Export Graph")
+        export_btn.clicked.connect(self.export_graph)
+        layout.addWidget(export_btn)
 
         self.toggle_mode_btn = QPushButton("Complicated Mode")
         self.toggle_mode_btn.setCheckable(True)
@@ -156,16 +160,32 @@ class SignalViewer(QMainWindow):
         self.toggle_panel_btn.toggled.connect(self.toggle_right_panel)
         layout.addWidget(self.toggle_panel_btn)
 
-        self.toggle_cursor_mode = QPushButton("Dock Cursor Info")
-        self.toggle_cursor_mode.setCheckable(True)
-        self.toggle_cursor_mode.setChecked(False)
-        self.toggle_cursor_mode.toggled.connect(self.toggle_cursor_info_mode)
-        layout.addWidget(self.toggle_cursor_mode)
+        self.setup_checkboxes(layout)
+        self.setup_filter_section(layout)
 
-        # === Grid layout for checkboxes ===
-        checkbox_container = QWidget()
-        checkbox_layout = QHBoxLayout(checkbox_container)
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll_content = QWidget()
+        self.scroll.setWidget(self.scroll_content)
+        self.scroll_layout = QVBoxLayout(self.scroll_content)
+        layout.addWidget(self.scroll)
 
+        self.cursor_a = pg.InfiniteLine(angle=90, movable=True, pen='m')
+        self.cursor_b = pg.InfiniteLine(angle=90, movable=True, pen='c')
+        self.cursor_a.setVisible(False)
+        self.cursor_b.setVisible(False)
+        self.plot_widget.addItem(self.cursor_a)
+        self.plot_widget.addItem(self.cursor_b)
+
+        self.cursor_a.sigPositionChanged.connect(self.update_cursor_info)
+        self.cursor_b.sigPositionChanged.connect(self.update_cursor_info)
+
+        self.cursor_info = CursorInfoDialog(self)
+        self.crosshair = Crosshair(self.main_view)
+
+        self.setStatusBar(QStatusBar())
+
+    def setup_checkboxes(self, layout):
         checkbox_container = QWidget()
         checkbox_layout = QHBoxLayout(checkbox_container)
 
@@ -185,9 +205,6 @@ class SignalViewer(QMainWindow):
         self.toggle_crosshair_chk.toggled.connect(self.toggle_crosshair)
         col2.addWidget(self.toggle_crosshair_chk)
 
-        self.cursor_info = CursorInfoDialog(self)  # Musí být zde před použitím
-        self.crosshair = Crosshair(self.main_view)
-
         self.cursor_b_chk = QCheckBox("Show Cursor B")
         self.cursor_b_chk.toggled.connect(lambda s: self.toggle_cursor(self.cursor_b, s))
         col2.addWidget(self.cursor_b_chk)
@@ -196,38 +213,17 @@ class SignalViewer(QMainWindow):
         checkbox_layout.addLayout(col2)
         layout.addWidget(checkbox_container)
 
+    def setup_filter_section(self, layout):
         self.filter_box = QLineEdit()
         self.filter_box.setPlaceholderText("Filter signals...")
         self.filter_box.textChanged.connect(self.apply_signal_filter)
         layout.addWidget(self.filter_box)
 
-        btn = QPushButton("Add virtual signal")
-        btn.clicked.connect(self.add_virtual_signal)
-        layout.addWidget(btn)
+        virtual_btn = QPushButton("Add Virtual Signal")
+        virtual_btn.clicked.connect(self.add_virtual_signal)
+        layout.addWidget(virtual_btn)
 
         layout.addWidget(QLabel("Signals:"))
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll_content = QWidget()
-        self.scroll.setWidget(self.scroll_content)
-        self.scroll_layout = QVBoxLayout(self.scroll_content)
-        layout.addWidget(self.scroll)
-
-        # === Cursors and Status ===
-        self.cursor_a = pg.InfiniteLine(angle=90, movable=True, pen='m')
-        self.cursor_b = pg.InfiniteLine(angle=90, movable=True, pen='c')
-        self.cursor_a.setVisible(False)
-        self.cursor_b.setVisible(False)
-        self.plot_widget.addItem(self.cursor_a)
-        self.plot_widget.addItem(self.cursor_b)
-
-        self.cursor_a.sigPositionChanged.connect(self.update_cursor_info)
-        self.cursor_b.sigPositionChanged.connect(self.update_cursor_info)
-
-        self.cursor_info = CursorInfoDialog(self)
-        self.crosshair = Crosshair(self.main_view)
-
-        self.setStatusBar(QStatusBar())
 
     def build_signal_row(self, name):
         """
@@ -304,16 +300,14 @@ class SignalViewer(QMainWindow):
         for name, widgets in self.signal_widgets.items():
             if widgets['checkbox'] == cb:
                 if cb.isChecked():
+                    color = '#ffffff'
+                    width = 2
+                    axis = 'Left'
                     if self.complex_mode:
                         color = widgets['color_btn'].palette().button().color().name()
                         width = widgets['width'].value()
                         axis = widgets['axis'].currentText()
-                    else:
-                        color = '#ffffff'
-                        width = 2
-                        axis = 'Left'
 
-                    # === Auto-detect digital signal ===
                     if is_digital_signal(self.data_signals[name]):
                         axis = 'Digital'
                         style = dict(stepMode=True, width=3)
@@ -322,11 +316,7 @@ class SignalViewer(QMainWindow):
 
                     pen = pg.mkPen(color=color, **style)
                     time_arr, value_arr = self.data_signals[name]
-                    curve = pg.PlotCurveItem(
-                        x=time_arr,
-                        y=value_arr,
-                        pen=pen
-                    )
+                    curve = pg.PlotCurveItem(x=time_arr, y=value_arr, pen=pen)
                     self.viewboxes[axis].addItem(curve)
                     self.curves[name] = curve
                     self.signal_axis_map[axis].append(name)
@@ -354,7 +344,6 @@ class SignalViewer(QMainWindow):
                 html_parts.append(f'<span style="color:{color}">{base_name}</span>')
             html_text = ", ".join(html_parts) if html_parts else axis
             label.setLabel(text=html_text)
-
 
     def pick_color(self, btn):
         """
@@ -400,7 +389,6 @@ class SignalViewer(QMainWindow):
                     cursor.setPos(mid)
             except Exception:
                 pass
-
         self.cursor_info.setVisible(self.cursor_a.isVisible() or self.cursor_b.isVisible())
         self.update_cursor_info()
 
@@ -515,7 +503,6 @@ class SignalViewer(QMainWindow):
         if dialog.exec() == QDialog.Accepted:
             name, expression, mapping = dialog.get_result()
             try:
-                # Replace aliases (G1, G2...) in expression with actual signal variable names
                 local_vars = {}
                 for alias, real_signal in mapping.items():
                     safe_name = f"__{alias}__"
@@ -523,7 +510,6 @@ class SignalViewer(QMainWindow):
                     local_vars[safe_name] = self.data_signals[real_signal]
 
                 result = eval(expression, {}, local_vars)
-
                 if not isinstance(result, np.ndarray):
                     raise ValueError("Expression did not return an array.")
 
@@ -553,3 +539,15 @@ class SignalViewer(QMainWindow):
         for name in signals:
             row = self.build_signal_row(name)
             self.scroll_layout.addWidget(row)
+
+    def export_graph(self):
+        try:
+            from pyqtgraph.exporters import ImageExporter
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, "Export Graph", "graph.png", "PNG Images (*.png);;PDF Files (*.pdf)"
+            )
+            if file_path:
+                exporter = ImageExporter(self.plot_widget.plotItem)
+                exporter.export(file_path)
+        except ImportError:
+            print("pyqtgraph.exporters not available. Cannot export graph.")

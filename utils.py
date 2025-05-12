@@ -122,7 +122,7 @@ def parse_recorder_format(text):
     if not (start_time_str and interval_sec and item_map and data_lines):
         raise ValueError("Invalid recorder format.")
 
-    start_dt = datetime.strptime(start_time_str, "%y/%m/%d %H:%M:%S")
+    start_dt = datetime.strptime(start_time_str, "%m/%d/%y %H:%M:%S")
     data_lines.sort(key=lambda row: row[0])
     timestamps = [(start_dt - timedelta(seconds=row[0] * interval_sec)).timestamp() for row in data_lines]
 
