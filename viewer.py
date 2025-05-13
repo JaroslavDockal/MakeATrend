@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QCheckBox, QScrollArea, QSplitter, QStatusBar,
     QComboBox, QColorDialog, QSpinBox, QLineEdit, QDialog,
-    QFileDialog, QGraphicsProxyWidget
+    QFileDialog, QGraphicsProxyWidget, QMessageBox
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -25,7 +25,7 @@ from custom_viewbox import CustomViewBox
 from virtual_signal_dialog import VirtualSignalDialog
 from loader import load_multiple_files, load_single_file
 from signal_colors import SignalColors
-
+from signal_analysis import show_analysis_dialog
 
 class SignalViewer(QMainWindow):
     """
@@ -120,6 +120,7 @@ class SignalViewer(QMainWindow):
         self.plot_widget.scene().addItem(self.viewboxes['Digital'])
         self.viewboxes['Right'].setXLink(self.main_view)
         self.viewboxes['Digital'].setXLink(self.main_view)
+        self.viewboxes['Digital'].setYRange(-0.1, 1.1, padding=0.1)
 
         self.signal_axis_map = {k: [] for k in self.viewboxes}
         self.axis_labels = {
@@ -133,6 +134,11 @@ class SignalViewer(QMainWindow):
         self.plot_widget.getPlotItem().layout.addItem(self.axis_labels['Digital'], 2, 4)
         self.axis_labels['Digital'].linkToView(self.viewboxes['Digital'])
 
+        digital_background = pg.QtWidgets.QGraphicsRectItem()
+        digital_background.setPen(pg.mkPen(None))
+        digital_background.setBrush(pg.mkBrush(20, 20, 20, 50))  # Subtle dark background
+        self.viewboxes['Digital'].addItem(digital_background)
+
         def sync_views():
             geom = self.main_view.sceneBoundingRect()
             self.viewboxes['Right'].setGeometry(geom)
@@ -145,24 +151,45 @@ class SignalViewer(QMainWindow):
     def setup_control_panel(self):
         layout = QVBoxLayout(self.control_panel)
 
+        # Create a widget for buttons with a grid layout
+        button_widget = QWidget()
+        button_layout = QHBoxLayout(button_widget)
+
+        # Create two columns
+        left_column = QVBoxLayout()
+        right_column = QVBoxLayout()
+
         load_btn = QPushButton("Load Files")
         load_btn.clicked.connect(lambda: self.load_data(multiple=True))
-        layout.addWidget(load_btn)
-
-        export_btn = QPushButton("Export Graph")
-        export_btn.clicked.connect(self.export_graph)
-        layout.addWidget(export_btn)
+        left_column.addWidget(load_btn)
 
         self.toggle_mode_btn = QPushButton("Advanced Mode")
         self.toggle_mode_btn.setCheckable(True)
         self.toggle_mode_btn.toggled.connect(self.toggle_complex_mode)
-        layout.addWidget(self.toggle_mode_btn)
+        left_column.addWidget(self.toggle_mode_btn)
 
         self.toggle_panel_btn = QPushButton("Toggle Panel")
         self.toggle_panel_btn.setCheckable(True)
         self.toggle_panel_btn.setChecked(True)
         self.toggle_panel_btn.toggled.connect(self.toggle_right_panel)
-        layout.addWidget(self.toggle_panel_btn)
+        left_column.addWidget(self.toggle_panel_btn)
+
+        export_btn = QPushButton("Export Graph")
+        export_btn.clicked.connect(self.export_graph)
+        right_column.addWidget(export_btn)
+
+        analysis_btn = QPushButton("Signal Analysis")
+        analysis_btn.clicked.connect(self.open_analysis_dialog)
+        right_column.addWidget(analysis_btn)
+
+        virtual_btn = QPushButton("Add Virtual Signal")
+        virtual_btn.clicked.connect(self.add_virtual_signal)
+        right_column.addWidget(virtual_btn)
+
+        button_layout.addLayout(left_column)
+        button_layout.addLayout(right_column)
+
+        layout.addWidget(button_widget)
 
         self.setup_checkboxes(layout)
         self.setup_filter_section(layout)
@@ -226,10 +253,6 @@ class SignalViewer(QMainWindow):
         self.filter_box.setPlaceholderText("Filter signals...")
         self.filter_box.textChanged.connect(self.apply_signal_filter)
         layout.addWidget(self.filter_box)
-
-        virtual_btn = QPushButton("Add Virtual Signal")
-        virtual_btn.clicked.connect(self.add_virtual_signal)
-        layout.addWidget(virtual_btn)
 
         layout.addWidget(QLabel("Signals:"))
 
@@ -511,26 +534,36 @@ class SignalViewer(QMainWindow):
         The user defines a name and an expression based on existing signals.
         If the expression is valid, the new signal is added and plotted.
         """
-        dialog = VirtualSignalDialog(list(self.data_signals.keys()), parent=self)
-        if dialog.exec() == QDialog.Accepted:
-            name, expression, mapping = dialog.get_result()
+        signal_names = list(self.data_signals.keys())
+
+        if not signal_names:
+            QMessageBox.warning(self, "Virtual Signal", "No signals loaded. Load some signals first.")
+            return
+
+        dialog = VirtualSignalDialog(signal_names, self)
+        if dialog.exec():
+            signal_name, expression, alias_mapping = dialog.get_result()
             try:
-                local_vars = {}
-                for alias, real_signal in mapping.items():
-                    safe_name = f"__{alias}__"
-                    expression = re.sub(rf'\b{alias}\b', safe_name, expression)
-                    local_vars[safe_name] = self.data_signals[real_signal]
+                # Use the dedicated compute_virtual_signal function from virtual_signal_dialog
+                from virtual_signal_dialog import compute_virtual_signal
 
-                result = eval(expression, {}, local_vars)
-                if not isinstance(result, np.ndarray):
-                    raise ValueError("Expression did not return an array.")
+                # Compute the virtual signal
+                time_array, values = compute_virtual_signal(expression, alias_mapping, self.data_signals)
 
-                self.data_signals[name] = result
-                row = self.build_signal_row(name)
+                # Add the virtual signal to the data dictionary
+                self.data_signals[signal_name] = (time_array, values)
+
+                # Create UI row for the new signal
+                row = self.build_signal_row(signal_name)
                 self.scroll_layout.addWidget(row)
-                self.signal_widgets[name]['checkbox'].setChecked(True)
+
+                # Auto-select the new signal
+                self.signal_widgets[signal_name]['checkbox'].setChecked(True)
+
+                QMessageBox.information(self, "Virtual Signal",
+                                        f"Virtual signal '{signal_name}' created successfully.")
             except Exception as e:
-                print(f"Failed to compute virtual signal: {e}")
+                QMessageBox.critical(self, "Virtual Signal Error", str(e))
 
     def load_data(self, multiple=False):
         """
@@ -563,3 +596,6 @@ class SignalViewer(QMainWindow):
                 exporter.export(file_path)
         except ImportError:
             print("pyqtgraph.exporters not available. Cannot export graph.")
+
+    def open_analysis_dialog(self):
+        show_analysis_dialog(self)
