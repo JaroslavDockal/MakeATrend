@@ -190,6 +190,7 @@ def find_nearest_index(array, value):
 
 
 def is_digital_signal(arr):
+    #TODO Zajistit že signál s nulovou hodnotou nebude klasifikován jako digital
     """
     Determines whether a signal is digital (boolean-like).
 
@@ -198,20 +199,27 @@ def is_digital_signal(arr):
     - Not numeric 0/1, to avoid misclassification of analog signals
 
     Args:
-        arr (np.ndarray): Signal values (can be numeric or string).
+        arr: NumPy array or tuple of (time_array, values_array)
 
     Returns:
-        bool: True if the signal is clearly boolean (TRUE/FALSE), False otherwise.
+        bool: True if signal appears to be digital/binary
     """
-    # For numeric arrays
+
+    # Handle case where argument is a tuple (time, values)
+    if isinstance(arr, tuple) and len(arr) == 2:
+        _, arr = arr  # Extract just the values
+
+    if not isinstance(arr, np.ndarray):
+        arr = np.array(arr)
+
     if np.issubdtype(arr.dtype, np.number):
-        unique = np.unique(arr)
-        return len(unique) <= 2 and all(v in (0, 1) for v in unique)
-
-    # For string arrays
-    unique = set(str(v).strip().lower() for v in np.unique(arr))
-    return unique.issubset({'true', 'false'})
-
+        # Find unique values excluding NaN
+        unique_vals = np.unique(arr[~np.isnan(arr)])
+        # Consider digital if 2-3 unique values within integers 0-5
+        if len(unique_vals) <= 3 and all(val.is_integer() for val in unique_vals) and all(
+                0 <= val <= 5 for val in unique_vals):
+            return True
+    return False
 
 # ===== GRAPH EXPORT FUNCTIONS =====
 
