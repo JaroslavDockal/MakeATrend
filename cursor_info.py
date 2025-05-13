@@ -134,15 +134,20 @@ class CursorInfoDialog(QDialog):
             delta = None
             dps = None
 
-            try:
-                a = float(a_val)
-                b = float(b_val)
-                if has_a and has_b and not is_bool:
-                    delta = b - a
-                    if delta_t and delta_t > 0:
-                        dps = delta / delta_t
-            except:
-                pass
+            if is_bool:
+                # Digital signals: Display TRUE/FALSE and set Δ and Δ/s to "---"
+                delta = "---"
+                dps = "---"
+            else:
+                try:
+                    a = float(a_val)
+                    b = float(b_val)
+                    if has_a and has_b:
+                        delta = b - a
+                        if delta_t and delta_t > 0:
+                            dps = delta / delta_t
+                except:
+                    pass
 
             self._current_table_data.append({
                 "key": clean_name,
@@ -172,7 +177,7 @@ class CursorInfoDialog(QDialog):
             return str(a_val).strip().upper() in valid and str(b_val).strip().upper() in valid
         except Exception:
             return False
-
+#TODO : Pořešit správnou interpretaci jestli je signál boolean
     def _format_val(self, val, unit="", is_bool=False):
         if val is None or str(val).strip() == "":
             return "-"
@@ -202,6 +207,7 @@ class CursorInfoDialog(QDialog):
         self._export_data = []
 
         for i, row in enumerate(self._current_table_data):
+            is_bool = row["bool"]
             unit = row["unit"]
             unit_per_s = f"{unit}/s" if unit else ""
             is_bool = row["bool"]
