@@ -1,5 +1,5 @@
 """
-Main GUI implementation of the CSV Signal Viewer.
+Main GUI implementation of the CSV Signal Viewer with custom color support.
 """
 
 import pyqtgraph as pg
@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QFileDialog, QGraphicsProxyWidget
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from pyqtgraph import DateAxisItem
 
 from utils import find_nearest_index, is_digital_signal
@@ -23,6 +24,8 @@ from crosshair import Crosshair
 from custom_viewbox import CustomViewBox
 from virtual_signal_dialog import VirtualSignalDialog
 from loader import load_multiple_files, load_single_file
+from signal_colors import SignalColors
+
 
 class SignalViewer(QMainWindow):
     """
@@ -54,6 +57,7 @@ class SignalViewer(QMainWindow):
         self.signal_widgets = {}
         self.complex_mode = False
         self.signal_filter_text = ""
+        self.color_counter = 0
 
         self.init_ui()
 
@@ -149,7 +153,7 @@ class SignalViewer(QMainWindow):
         export_btn.clicked.connect(self.export_graph)
         layout.addWidget(export_btn)
 
-        self.toggle_mode_btn = QPushButton("Complicated Mode")
+        self.toggle_mode_btn = QPushButton("Advanced Mode")
         self.toggle_mode_btn.setCheckable(True)
         self.toggle_mode_btn.toggled.connect(self.toggle_complex_mode)
         layout.addWidget(self.toggle_mode_btn)
@@ -209,6 +213,10 @@ class SignalViewer(QMainWindow):
         self.cursor_b_chk.toggled.connect(lambda s: self.toggle_cursor(self.cursor_b, s))
         col2.addWidget(self.cursor_b_chk)
 
+        self.dock_cursor_info_chk = QCheckBox("Dock Cursor Info")
+        self.dock_cursor_info_chk.toggled.connect(self.toggle_cursor_info_mode)
+        col1.addWidget(self.dock_cursor_info_chk)
+
         checkbox_layout.addLayout(col1)
         checkbox_layout.addLayout(col2)
         layout.addWidget(checkbox_container)
@@ -246,8 +254,11 @@ class SignalViewer(QMainWindow):
         axis_cb.addItems(['Left', 'Right'])
         axis_cb.setVisible(False)
 
+        # Použití SignalColors pro konzistentní barvu
+        signal_color = SignalColors.get_color_for_name(name)
+
         color_btn = QPushButton("Color")
-        color_btn.setStyleSheet("background-color: white")
+        color_btn.setStyleSheet(f"background-color: {signal_color}")
         color_btn.clicked.connect(lambda _, b=color_btn: self.pick_color(b))
         color_btn.setVisible(False)
 
@@ -282,6 +293,7 @@ class SignalViewer(QMainWindow):
         self.curves.clear()
         self.signal_axis_map = {k: [] for k in self.viewboxes}
         self.signal_styles.clear()
+        self.color_counter = 0  # Reset color counter
 
         for i in reversed(range(self.scroll_layout.count())):
             widget = self.scroll_layout.itemAt(i).widget()
@@ -300,11 +312,11 @@ class SignalViewer(QMainWindow):
         for name, widgets in self.signal_widgets.items():
             if widgets['checkbox'] == cb:
                 if cb.isChecked():
-                    color = '#ffffff'
+                    # Použít barvu z tlačítka, které již bylo inicializováno pomocí SignalColors
+                    color = widgets['color_btn'].palette().button().color().name()
                     width = 2
                     axis = 'Left'
                     if self.complex_mode:
-                        color = widgets['color_btn'].palette().button().color().name()
                         width = widgets['width'].value()
                         axis = widgets['axis'].currentText()
 
