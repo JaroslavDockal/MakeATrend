@@ -130,6 +130,85 @@ def validate_signal_name(name: str, existing_names: list) -> tuple[bool, str]:
     return True, ""
 
 
+# Function to compute virtual signals (moved outside of the class)
+def compute_virtual_signal(expression, alias_mapping, data_signals):
+    """
+    Computes a virtual signal from an expression and signal mapping.
+
+    Args:
+        expression (str): The expression to evaluate (e.g., "A + B * 2")
+        alias_mapping (dict): Mapping of aliases to actual signal names
+        data_signals (dict): Dictionary of signal data as (time_array, values_array) tuples
+
+    Returns:
+        tuple: (time_array, values_array) for the computed virtual signal
+    """
+    # Create a namespace with the signal values
+    namespace = {}
+
+    # Basic validation
+    if not alias_mapping:
+        raise ValueError("No signal aliases provided")
+
+    # Get the time array from the first signal
+    try:
+        first_signal = list(alias_mapping.values())[0]
+        if first_signal not in data_signals:
+            raise ValueError(f"Signal '{first_signal}' not found in data")
+        time_array, _ = data_signals[first_signal]
+    except (IndexError, KeyError) as e:
+        raise ValueError(f"Error accessing first signal: {str(e)}")
+
+    # Add each signal's values to the namespace
+    for alias, signal_name in alias_mapping.items():
+        if signal_name not in data_signals:
+            raise ValueError(f"Signal '{signal_name}' not found in data")
+
+        try:
+            time_vals, signal_vals = data_signals[signal_name]
+            namespace[alias] = signal_vals
+        except Exception as e:
+            raise ValueError(f"Error extracting data for signal '{signal_name}': {str(e)}")
+
+    # Add numpy functions to namespace
+    safe_numpy = {
+        'sin': np.sin, 'cos': np.cos, 'tan': np.tan,
+        'abs': np.abs, 'sqrt': np.sqrt, 'log': np.log,
+        'exp': np.exp, 'pi': np.pi
+    }
+
+    try:
+        # Safely evaluate the expression
+        result = eval(expression, {"__builtins__": {}, "np": safe_numpy}, namespace)
+
+        # Debug output
+        print(f"Expression result type: {type(result)}")
+
+        # Check if result is array-like
+        if result is None:
+            raise ValueError("Expression returned None")
+
+        if not hasattr(result, '__len__'):
+            print(f"Converting scalar {result} to array")
+            result = np.full_like(time_array, result)
+        elif not isinstance(result, np.ndarray):
+            print(f"Converting {type(result)} to numpy array")
+            result = np.array(result)
+
+        # Ensure result has same length as time_array
+        if len(result) != len(time_array):
+            raise ValueError(
+                f"Expression result length ({len(result)}) doesn't match time array length ({len(time_array)})")
+
+        return time_array, result
+
+    except Exception as e:
+        import traceback
+        print(f"Expression evaluation error: {str(e)}")
+        print(traceback.format_exc())
+        raise ValueError(f"Failed to compute virtual signal: {str(e)}")
+
+
 # ======================
 # Virtual Signal Dialog
 # ======================
