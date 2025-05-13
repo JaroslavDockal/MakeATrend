@@ -1,15 +1,28 @@
 """
-utils.py
+combined_utils.py
 
-Utility functions for parsing CSV data and supporting the signal viewer.
+A combined module that provides:
+1. Utilities for parsing CSV and proprietary recorder files
+2. Functions for exporting graphs to various formats (PNG, PDF, SVG)
+
+Optional dependencies:
+- PySide6.QtPrintSupport: Required for PDF export
+- PySide6.QtSvg: Required for SVG export
 """
 
+import os
+import re
 import pandas as pd
 import numpy as np
 import warnings
-import re
 from datetime import datetime, timedelta
 
+from PySide6.QtWidgets import QMessageBox, QFileDialog
+from PySide6.QtCore import QBuffer, QIODevice, QSize, QRect
+from PySide6.QtGui import QPixmap, QPainter, QImage
+
+
+# ===== CSV AND DATA PARSING FUNCTIONS =====
 
 def parse_csv_or_recorder(path: str):
     """
@@ -26,14 +39,16 @@ def parse_csv_or_recorder(path: str):
     with open(path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    if "RECORDER VALUES" in content and "Interval:" in content:
+    if ("RECORDER VALUES" in content or "TREND VALUES" in content) and "Interval:" in content:
         return parse_recorder_format(content)
     else:
         return parse_csv_file(path)
 
+
 def parse_csv_file(path):
     """
     Parses a standard CSV file and returns timestamp array and signal data.
+    Handles both numeric values and boolean string values ('TRUE'/'FALSE').
 
     Args:
         path (str): Path to the CSV file.
@@ -48,6 +63,10 @@ def parse_csv_file(path):
     """
     try:
         df = pd.read_csv(path, sep=';', engine='python')
+    except pd.errors.ParserError as e:
+        raise ValueError(f"CSV parsing error: {e}")
+    except FileNotFoundError:
+        raise ValueError(f"File not found: {path}")
     except Exception as e:
         raise ValueError(f"Failed to read CSV: {e}")
 
@@ -69,10 +88,27 @@ def parse_csv_file(path):
     for col in df.columns:
         if col in ('Date', 'Time', 'Timestamp'):
             continue
-        cleaned = df[col].astype(str).str.replace(',', '.', regex=False)
-        numeric = pd.to_numeric(cleaned, errors='coerce')
-        if not numeric.isnull().all():
-            signals[col] = numeric.to_numpy(dtype=np.float32)
+
+        # Direct approach for boolean values - check if any values are TRUE/FALSE
+        values = df[col].astype(str).str.upper()
+        true_mask = values == 'TRUE'
+        false_mask = values == 'FALSE'
+
+        # If column contains TRUE/FALSE values, treat as boolean
+        if true_mask.any() or false_mask.any():
+            bool_array = np.zeros(len(df), dtype=np.float32)
+            bool_array[true_mask] = 1.0
+            signals[col] = bool_array
+        else:
+            # Try numeric conversion for non-boolean columns
+            try:
+                cleaned = df[col].astype(str).str.replace(',', '.', regex=False)
+                numeric = pd.to_numeric(cleaned, errors='coerce')
+                if not numeric.isnull().all():
+                    signals[col] = numeric.to_numpy(dtype=np.float32)
+            except Exception:
+                # Skip columns that can't be parsed
+                pass
 
     if not signals:
         raise ValueError("No signals could be parsed.")
@@ -82,15 +118,15 @@ def parse_csv_file(path):
 
 def parse_recorder_format(text):
     """
-    Parses a text file in the special "Drive Window" format.
+    Parses a text file in the special "Drive Debug" format.
 
     Args:
         text (str): Full content of the file.
 
     Returns:
         tuple:
-            - np.ndarray: Array of timestamps (float).
-            - dict[str, np.ndarray]: Dictionary of signal name -> values.
+            - np.ndarray: Array of timestamps (float, seconds since UNIX epoch).
+            - dict[str, np.ndarray]: Dictionary of signal name -> signal values as float32 arrays.
     """
     lines = text.strip().splitlines()
     item_map = {}
@@ -136,6 +172,7 @@ def parse_recorder_format(text):
 
     return np.array(timestamps, dtype=np.float64), signals
 
+
 def find_nearest_index(array, value):
     """
     Finds the index of the closest value in an array.
@@ -147,7 +184,10 @@ def find_nearest_index(array, value):
     Returns:
         int: Index of the closest value in the array.
     """
+    if array.size == 0:
+        raise ValueError("Cannot find nearest index in an empty array")
     return (np.abs(array - value)).argmin()
+
 
 def is_digital_signal(arr):
     """
@@ -163,5 +203,195 @@ def is_digital_signal(arr):
     Returns:
         bool: True if the signal is clearly boolean (TRUE/FALSE), False otherwise.
     """
+    # For numeric arrays
+    if np.issubdtype(arr.dtype, np.number):
+        unique = np.unique(arr)
+        return len(unique) <= 2 and all(v in (0, 1) for v in unique)
+
+    # For string arrays
     unique = set(str(v).strip().lower() for v in np.unique(arr))
     return unique.issubset({'true', 'false'})
+
+
+# ===== GRAPH EXPORT FUNCTIONS =====
+
+def export_graph(plot_widget, parent_widget=None):
+    """
+    Exports a graph to a PNG, PDF, or SVG file.
+
+    Implements robust export with error handling and user feedback.
+    Unlike PyQtGraph Exporter, it works without external library dependencies.
+
+    Args:
+        plot_widget (pg.PlotWidget): Graph widget to export.
+        parent_widget (QWidget, optional): Parent widget for dialogs.
+
+    Returns:
+        bool: True if export was successful, otherwise False.
+    """
+    try:
+        # Get current graph dimensions
+        width = plot_widget.width()
+        height = plot_widget.height()
+
+        # Offer file selection
+        file_filters = "PNG images (*.png);;PDF documents (*.pdf);;SVG vector format (*.svg)"
+        file_path, selected_filter = QFileDialog.getSaveFileName(
+            parent_widget, "Export Graph", "graph.png", file_filters
+        )
+
+        if not file_path:
+            return False  # User canceled the dialog
+
+        # Determine format by selected filter
+        if "PNG" in selected_filter:
+            if not file_path.lower().endswith('.png'):
+                file_path += '.png'
+            export_format = 'png'
+        elif "PDF" in selected_filter:
+            if not file_path.lower().endswith('.pdf'):
+                file_path += '.pdf'
+            export_format = 'pdf'
+        elif "SVG" in selected_filter:
+            if not file_path.lower().endswith('.svg'):
+                file_path += '.svg'
+            export_format = 'svg'
+        else:
+            # Default to PNG
+            if not file_path.lower().endswith(('.png', '.pdf', '.svg')):
+                file_path += '.png'
+            export_format = 'png'
+
+        # Create QPixmap for rendering the graph
+        pixmap = QPixmap(width, height)
+        pixmap.fill()  # Fill with transparent color
+
+        # Render the graph to QPixmap
+        painter = QPainter(pixmap)
+        plot_widget.render(painter)
+        painter.end()
+
+        # Export according to chosen format
+        success = False
+
+        if export_format == 'png':
+            success = pixmap.save(file_path, "PNG")
+        elif export_format == 'pdf':
+            # For PDF we need to use QPrinter
+            try:
+                from PySide6.QtPrintSupport import QPrinter
+                printer = QPrinter()
+                printer.setOutputFormat(QPrinter.PdfFormat)
+                printer.setOutputFileName(file_path)
+
+                # PySide6 has different enum values in different versions
+                # Try to set page size in a compatible way
+                try:
+                    # Try using the page size enum constants directly
+                    printer.setPageSize(QPrinter.A4)
+                except AttributeError:
+                    try:
+                        # For newer PySide6 versions that use QPageSize
+                        from PySide6.QtGui import QPageSize
+                        printer.setPageSize(QPageSize(QPageSize.A4))
+                    except (AttributeError, ImportError):
+                        # If all else fails, just use whatever default size is available
+                        pass
+
+                # Render to printer
+                painter = QPainter()
+                try:
+                    if painter.begin(printer):
+                        plot_widget.render(painter)
+                        success = True
+                finally:
+                    painter.end()
+            except ImportError:
+                QMessageBox.critical(
+                    parent_widget,
+                    "Export Error",
+                    "For PDF export, the QtPrintSupport library is required but not available."
+                )
+                return False
+        elif export_format == 'svg':
+            try:
+                from PySide6.QtSvg import QSvgGenerator
+                generator = QSvgGenerator()
+                generator.setFileName(file_path)
+                generator.setSize(QSize(width, height))
+                generator.setViewBox(QRect(0, 0, width, height))
+
+                # Render to SVG with proper resource management
+                painter = QPainter()
+                try:
+                    if painter.begin(generator):
+                        plot_widget.render(painter)
+                        success = True
+                finally:
+                    painter.end()  # Make sure painter is always ended
+            except ImportError:
+                QMessageBox.critical(
+                    parent_widget,
+                    "Export Error",
+                    "For SVG export, the QtSvg library is required but not available."
+                )
+                return False
+
+        # Inform user about the result
+        if success:
+            QMessageBox.information(
+                parent_widget,
+                "Export Complete",
+                f"Graph was successfully exported to file:\n{file_path}"
+            )
+            return True
+        else:
+            QMessageBox.critical(
+                parent_widget,
+                "Export Error",
+                f"Export to file {file_path} failed."
+            )
+            return False
+
+    except Exception as e:
+        # Catch any errors and display them to the user
+        QMessageBox.critical(
+            parent_widget,
+            "Export Error",
+            f"An error occurred during graph export:\n{str(e)}"
+        )
+        return False
+
+
+def export_graph_fallback(plot_widget, parent_widget=None):
+    """
+    Fallback export method using PyQtGraph Exporter if available.
+
+    Args:
+        plot_widget (pg.PlotWidget): Graph widget to export.
+        parent_widget (QWidget, optional): Parent widget for dialogs.
+
+    Returns:
+        bool: True if export was successful, otherwise False.
+    """
+    try:
+        # Try to import the exporter from PyQtGraph
+        from pyqtgraph.exporters import ImageExporter
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            parent_widget, "Export Graph", "graph.png", "PNG images (*.png)"
+        )
+
+        if file_path:
+            exporter = ImageExporter(plot_widget.plotItem)
+            exporter.export(file_path)
+            QMessageBox.information(
+                parent_widget,
+                "Export Complete",
+                f"Graph was successfully exported to file:\n{file_path}"
+            )
+            return True
+        return False
+    except ImportError:
+        # If exporter is not available, try our own export
+        return export_graph(plot_widget, parent_widget)
