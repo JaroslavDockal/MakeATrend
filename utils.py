@@ -15,6 +15,7 @@ import re
 import pandas as pd
 import numpy as np
 import warnings
+import json
 from datetime import datetime, timedelta
 
 from PySide6.QtWidgets import QMessageBox, QFileDialog
@@ -403,3 +404,37 @@ def export_graph_fallback(plot_widget, parent_widget=None):
     except ImportError:
         # If exporter is not available, try our own export
         return export_graph(plot_widget, parent_widget)
+
+
+def save_project_state(file_path, state):
+    """
+    Saves the project state to a JSON file.
+
+    Args:
+        file_path (str): Path to save the project state.
+        state (dict): The project state to save.
+    """
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(state, f, indent=4)
+    except Exception as e:
+        raise IOError(f"Failed to save project state: {e}")
+
+def load_project_state(file_path):
+    """
+    Loads the project state from a JSON file.
+
+    Args:
+        file_path (str): Path to the project state file.
+
+    Returns:
+        dict: The loaded project state.
+    """
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        raise IOError(f"Failed to load project state: {e}")
