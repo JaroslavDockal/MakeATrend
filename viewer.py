@@ -244,6 +244,11 @@ class SignalViewer(QMainWindow):
         self.dock_cursor_info_chk.toggled.connect(self.toggle_cursor_info_mode)
         col1.addWidget(self.dock_cursor_info_chk)
 
+        #TODO Přidat funkci pro log - Tohle je zatím jen placeholder
+        self.show_log_chk = QCheckBox("Show Log")
+        self.show_log_chk.toggled.connect(self.toggle_cursor_info_mode)
+        col2.addWidget(self.show_log_chk)
+
         checkbox_layout.addLayout(col1)
         checkbox_layout.addLayout(col2)
         layout.addWidget(checkbox_container)
