@@ -20,12 +20,10 @@ import scipy.signal as signal
 import scipy.stats as stats
 from scipy.signal import hilbert, butter, filtfilt, correlate
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QPushButton, QTableWidget,
-                               QTableWidgetItem, QHeaderView, QComboBox, QLabel,
-                               QWidget, QHBoxLayout, QGroupBox, QScrollArea, QTabWidget,
-                               QFormLayout, QDoubleSpinBox, QRadioButton, QButtonGroup,
-                               QMainWindow, QApplication, QSpinBox, QTextEdit, QSplitter,
-                               QGridLayout, QVBoxLayout, QGridLayout, QScrollArea)
+from PySide6.QtWidgets import (QDialog, QPushButton, QTableWidget, QTableWidgetItem,
+                               QHeaderView, QComboBox, QWidget, QHBoxLayout, QGroupBox,
+                               QTabWidget, QFormLayout, QDoubleSpinBox, QTextEdit, QSplitter,
+                               QVBoxLayout, QGridLayout, QScrollArea, QMainWindow)
 
 
 class SignalAnalysisTools:
