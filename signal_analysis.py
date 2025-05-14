@@ -17,13 +17,15 @@ import numpy as np
 import pyqtgraph as pg
 import pywt
 import scipy.signal as signal
+import scipy.stats as stats
 from scipy.signal import hilbert, butter, filtfilt, correlate
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QPushButton, QTableWidget,
                              QTableWidgetItem, QHeaderView, QComboBox, QLabel,
                              QWidget, QHBoxLayout, QGroupBox, QScrollArea, QTabWidget,
                              QFormLayout, QDoubleSpinBox, QRadioButton, QButtonGroup,
-                               QMainWindow, QApplication)
+                               QMainWindow, QApplication, QSpinBox, QTextEdit,
+                               QGridLayout, QVBoxLayout, QGridLayout, QScrollArea)
 
 
 class SignalAnalysisTools:
@@ -48,13 +50,16 @@ class SignalAnalysisTools:
         return {
             "Mean": np.mean(values),
             "Median": np.median(values),
-            "Min": np.min(values),
-            "Max": np.max(values),
-            "Range": np.max(values) - np.min(values),
-            "Std Dev": np.std(values),
+            "Minimum Value": np.min(values),
+            "Maximum Value": np.max(values),
+            "Range (Max - Min)": np.max(values) - np.min(values),
+            "Standard Deviation": np.std(values),
             "Variance": np.var(values),
-            "RMS": np.sqrt(np.mean(np.square(values))),
-            "Samples": len(values)
+            "Root Mean Square (RMS)": np.sqrt(np.mean(np.square(values))),
+            "Number of Samples": len(values),
+            "Skewness": stats.skew(values),
+            "Kurtosis": stats.kurtosis(values),
+            "Interquartile Range (IQR)": np.percentile(values, 75) - np.percentile(values, 25)
         }
 
     @staticmethod
@@ -65,6 +70,9 @@ class SignalAnalysisTools:
         Args:
             parent: The parent application instance containing data_signals.
             signal_name (str): Name of the signal to analyze.
+
+        Returns:
+            tuple: (freqs, magnitudes) - The frequency and magnitude data
         """
         time_arr, values = parent.data_signals[signal_name]
 
@@ -77,36 +85,7 @@ class SignalAnalysisTools:
         freqs = np.fft.rfftfreq(n, 1 / fs)
         magnitudes = np.abs(fft_values) / n * 2  # Scale appropriately
 
-        # Create plot window
-        plot_window = pg.GraphicsLayoutWidget(title=f"FFT Analysis: {signal_name}")
-        plot_window.setWindowTitle(f"FFT Analysis: {signal_name}")
-        plot_window.raise_()
-        plot_window.resize(800, 600)
-
-        # Time domain plot
-        p1 = plot_window.addPlot(row=0, col=0)
-        p1.setTitle("Time Domain")
-        p1.setLabel('left', 'Amplitude')
-        p1.setLabel('bottom', 'Time (s)')
-        p1.plot(time_arr, values, pen='b')
-
-        # Frequency domain plot
-        p2 = plot_window.addPlot(row=1, col=0)
-        p2.setTitle("Frequency Domain")
-        p2.setLabel('left', 'Magnitude')
-        p2.setLabel('bottom', 'Frequency (Hz)')
-        p2.plot(freqs, magnitudes, pen='r')
-
-        # Set log scale for better visualization
-        p2.setLogMode(x=True, y=False)
-
-        plot_window.show()
-        plot_window.raise_()
-
-        # Keep a reference to prevent garbage collection
-        if not hasattr(parent, '_fft_windows'):
-            parent._fft_windows = []
-        parent._fft_windows.append(plot_window)
+        return (time_arr, values, freqs, magnitudes)
 
     @staticmethod
     def analyze_signal(parent, signal_name):
@@ -162,10 +141,18 @@ class AdvancedSignalAnalysisTools:
         time_arr, values = parent.data_signals[signal_name]
         fs = 1 / np.mean(np.diff(time_arr))  # Sampling frequency
         freqs, psd = signal.welch(values, fs=fs, nperseg=256)
-        return freqs, psd
+
+        # Calculate some PSD statistics
+        psd_stats = {
+            "Peak Frequency (Hz)": freqs[np.argmax(psd)],
+            "Max Power (dB)": 10 * np.log10(np.max(psd)),
+            "Total Power": np.sum(psd)
+        }
+
+        return freqs, psd, psd_stats
 
     @staticmethod
-    def calculate_autocorrelation(parent, signal_name):
+    def autocorrelation(parent, signal_name):
         """
         Calculate the autocorrelation of a signal.
 
@@ -199,11 +186,11 @@ class AdvancedSignalAnalysisTools:
         """
         time_arr, values = parent.data_signals[signal_name]
         peaks, properties = signal.find_peaks(values, height=height, distance=distance)
-        
+
         # Calculate additional peak properties
         peak_heights = values[peaks]
         peak_widths = signal.peak_widths(values, peaks, rel_height=0.5)[0]
-        
+
         return {
             "Count": len(peaks),
             "Indices": peaks,
@@ -213,41 +200,6 @@ class AdvancedSignalAnalysisTools:
             "Max Height": np.max(peak_heights) if len(peak_heights) > 0 else 0,
             "Mean Width": np.mean(peak_widths) if len(peak_widths) > 0 else 0
         }
-
-    @staticmethod
-    def apply_filter(parent, signal_name, filter_type, cutoff_low, cutoff_high=None, order=4):
-        """
-        Apply filter to signal.
-
-        Args:
-            parent: The parent application instance containing data_signals.
-            signal_name (str): Name of the signal to analyze.
-            filter_type (str): Type of filter ('lowpass', 'highpass', 'bandpass').
-            cutoff_low (float): Lower cutoff frequency.
-            cutoff_high (float, optional): Higher cutoff frequency for bandpass filter.
-            order (int): Filter order.
-
-        Returns:
-            tuple: Time array and filtered signal values.
-        """
-        time_arr, values = parent.data_signals[signal_name]
-        fs = 1 / np.mean(np.diff(time_arr))  # Sampling frequency
-        
-        nyq = 0.5 * fs
-        low = cutoff_low / nyq
-        
-        if filter_type == 'lowpass':
-            b, a = butter(order, low, btype='low')
-        elif filter_type == 'highpass':
-            b, a = butter(order, low, btype='high')
-        elif filter_type == 'bandpass':
-            high = cutoff_high / nyq if cutoff_high else 0.99
-            b, a = butter(order, [low, high], btype='band')
-        else:
-            return time_arr, values
-            
-        filtered = filtfilt(b, a, values)
-        return time_arr, filtered
 
     @staticmethod
     def hilbert_transform(parent, signal_name):
@@ -263,17 +215,17 @@ class AdvancedSignalAnalysisTools:
         """
         time_arr, values = parent.data_signals[signal_name]
         analytic_signal = hilbert(values)
-        
+
         # Envelope is the magnitude of the analytic signal
         envelope = np.abs(analytic_signal)
-        
+
         # Instantaneous phase
         inst_phase = np.unwrap(np.angle(analytic_signal))
-        
+
         # Instantaneous frequency is the derivative of the phase
         dt = np.mean(np.diff(time_arr))
         inst_freq = np.diff(inst_phase) / (2.0 * np.pi * dt)
-        
+
         return {
             "envelope": (time_arr, envelope),
             "phase": (time_arr, inst_phase),
@@ -291,31 +243,31 @@ class AdvancedSignalAnalysisTools:
             signal2_name (str): Name of the second signal.
 
         Returns:
-            tuple: Lag times and correlation values.
+            tuple: Lag times, correlation values, and max lag.
         """
         time1, values1 = parent.data_signals[signal1_name]
         time2, values2 = parent.data_signals[signal2_name]
-        
+
         # Ensure signals have the same length by padding with zeros
         if len(values1) > len(values2):
             values2 = np.pad(values2, (0, len(values1) - len(values2)))
         elif len(values2) > len(values1):
             values1 = np.pad(values1, (0, len(values2) - len(values1)))
-            
+
         corr = correlate(values1, values2, mode='full')
         # Normalize
         corr = corr / np.sqrt(np.sum(values1**2) * np.sum(values2**2))
-        
+
         dt = np.mean(np.diff(time1))
         lags = np.arange(-len(values1) + 1, len(values1))
         lag_times = lags * dt
-        
+
         # Find maximum correlation and corresponding lag
         max_corr_idx = np.argmax(np.abs(corr))
         max_lag = lag_times[max_corr_idx]
-        
+
         return lag_times, corr, max_lag
-        
+
     @staticmethod
     def wavelet_transform(parent, signal_name, wavelet='db4', level=5):
         """
@@ -328,15 +280,15 @@ class AdvancedSignalAnalysisTools:
             level (int): Decomposition level.
 
         Returns:
-            tuple: List of coefficients and approximation.
+            tuple: List of coefficients, approximation, and details.
         """
         _, values = parent.data_signals[signal_name]
-        
+
         # Perform wavelet decomposition
         coeffs = pywt.wavedec(values, wavelet, level=level)
         approx = coeffs[0]  # Approximation
         details = coeffs[1:]  # Details
-        
+
         return coeffs, approx, details
 
     @staticmethod
@@ -353,21 +305,21 @@ class AdvancedSignalAnalysisTools:
             tuple: Interval centers and energy values.
         """
         time_arr, values = parent.data_signals[signal_name]
-        
+
         # Divide signal into intervals
         interval_size = len(values) // num_intervals
         intervals = [values[i:i+interval_size] for i in range(0, len(values), interval_size) if i + interval_size <= len(values)]
-        
+
         # Calculate energy in each interval
         energy = [np.sum(interval**2) for interval in intervals]
-        
+
         # Center time of each interval
         interval_centers = []
         for i in range(len(intervals)):
             start_idx = i * interval_size
             end_idx = min(start_idx + interval_size - 1, len(time_arr) - 1)
             interval_centers.append((time_arr[start_idx] + time_arr[end_idx]) / 2)
-        
+
         return interval_centers, energy
 
     @staticmethod
@@ -380,19 +332,19 @@ class AdvancedSignalAnalysisTools:
             signal_name (str): Name of the signal to analyze.
 
         Returns:
-            tuple: Time array and phase values.
+            tuple: Time array, phase values, and phase statistics.
         """
         time_arr, values = parent.data_signals[signal_name]
         analytic_signal = hilbert(values)
         phase = np.unwrap(np.angle(analytic_signal))
-        
+
         # Calculate phase statistics
         phase_stats = {
             "Mean Phase": np.mean(phase),
             "Phase Std Dev": np.std(phase),
             "Phase Range": np.max(phase) - np.min(phase)
         }
-        
+
         return time_arr, phase, phase_stats
 
     @staticmethod
@@ -405,19 +357,19 @@ class AdvancedSignalAnalysisTools:
             signal_name (str): Name of the signal to analyze.
 
         Returns:
-            tuple: Quefrency and cepstrum values.
+            tuple: Quefrency, cepstrum values.
         """
         time_arr, values = parent.data_signals[signal_name]
-        
+
         # Calculate real cepstrum
         spectrum = np.fft.fft(values)
         log_spectrum = np.log(np.abs(spectrum) + 1e-10)  # Add small value to avoid log(0)
         cepstrum = np.fft.ifft(log_spectrum).real
-        
+
         # Generate quefrency axis
         dt = np.mean(np.diff(time_arr))
         quefrency = np.arange(len(cepstrum)) * dt
-        
+
         return quefrency, cepstrum
 
 
@@ -447,10 +399,10 @@ class SignalAnalysisDialog(QDialog):
         self.parent = parent
         self.setWindowTitle("Signal Analysis")
         self.resize(800, 600)
-        
+
         # Store plot windows to prevent garbage collection
         self._plot_windows = []
-        
+
         self.setup_ui()
         self.update_signal_list()
 
@@ -459,103 +411,103 @@ class SignalAnalysisDialog(QDialog):
         Create and arrange the user interface components for the dialog.
         """
         layout = QVBoxLayout(self)
-        
+
         # Create tabs for better organization
         self.tab_widget = QTabWidget()
         layout.addWidget(self.tab_widget)
-        
+
         # ===== Basic Analysis Tab =====
         basic_tab = QWidget()
         basic_layout = QVBoxLayout(basic_tab)
         self.tab_widget.addTab(basic_tab, "Basic Analysis")
-        
+
         # Signal selector
         select_layout = QFormLayout()
         select_layout.addRow("Select Signal:", self.create_signal_selector())
         basic_layout.addLayout(select_layout)
-        
+
         # Basic analysis buttons
         button_layout = QHBoxLayout()
-        
+
         stats_btn = QPushButton("Basic Statistics")
         stats_btn.clicked.connect(self.show_statistics)
         button_layout.addWidget(stats_btn)
-        
+
         fft_btn = QPushButton("FFT Analysis")
         fft_btn.clicked.connect(self.show_fft)
         button_layout.addWidget(fft_btn)
-        
+
         time_analysis_btn = QPushButton("Time Domain Analysis")
         time_analysis_btn.clicked.connect(self.show_time_analysis)
         button_layout.addWidget(time_analysis_btn)
-        
+
         basic_layout.addLayout(button_layout)
-        
+
         # ===== Advanced Analysis Tab =====
         adv_tab = QWidget()
         adv_layout = QVBoxLayout(adv_tab)
         self.tab_widget.addTab(adv_tab, "Advanced Analysis")
-        
+
         # Signal selector for advanced tab
         adv_select_layout = QFormLayout()
         self.adv_signal_combo = QComboBox()
         adv_select_layout.addRow("Select Signal:", self.adv_signal_combo)
         adv_layout.addLayout(adv_select_layout)
-        
+
         # Advanced analysis buttons
         adv_button_layout = QHBoxLayout()
-        
+
         psd_btn = QPushButton("Power Spectral Density")
-        psd_btn.clicked.connect(self.show_psd)
+        psd_btn.clicked.connect(self.show_psd_analysis)
         adv_button_layout.addWidget(psd_btn)
-        
+
         autocorr_btn = QPushButton("Autocorrelation")
         autocorr_btn.clicked.connect(self.show_autocorrelation)
         adv_button_layout.addWidget(autocorr_btn)
-        
+
         peaks_btn = QPushButton("Peak Detection")
         peaks_btn.clicked.connect(self.show_peak_detection)
         adv_button_layout.addWidget(peaks_btn)
-        
+
         adv_layout.addLayout(adv_button_layout)
-        
+
         adv_button_layout2 = QHBoxLayout()
-        
+
         filter_btn = QPushButton("Apply Filter")
         filter_btn.clicked.connect(self.show_filter_dialog)
         adv_button_layout2.addWidget(filter_btn)
-        
+
         hilbert_btn = QPushButton("Hilbert Transform")
         hilbert_btn.clicked.connect(self.show_hilbert_transform)
         adv_button_layout2.addWidget(hilbert_btn)
-        
+
         energy_btn = QPushButton("Energy Analysis")
         energy_btn.clicked.connect(self.show_energy_analysis)
         adv_button_layout2.addWidget(energy_btn)
-        
+
         adv_layout.addLayout(adv_button_layout2)
-        
+
         adv_button_layout3 = QHBoxLayout()
-        
+
         phase_btn = QPushButton("Phase Analysis")
         phase_btn.clicked.connect(self.show_phase_analysis)
         adv_button_layout3.addWidget(phase_btn)
-        
+
         cepstrum_btn = QPushButton("Cepstral Analysis")
         cepstrum_btn.clicked.connect(self.show_cepstrum_analysis)
         adv_button_layout3.addWidget(cepstrum_btn)
-        
+
         wavelet_btn = QPushButton("Wavelet Transform")
         wavelet_btn.clicked.connect(self.show_wavelet_dialog)
         adv_button_layout3.addWidget(wavelet_btn)
-        
+
         adv_layout.addLayout(adv_button_layout3)
-        
+
         # ===== Cross Analysis Tab =====
         cross_tab = QWidget()
         cross_layout = QVBoxLayout(cross_tab)
         self.tab_widget.addTab(cross_tab, "Cross Analysis")
-        
+
         # Signal selectors for cross analysis
         cross_select_layout = QFormLayout()
         self.cross_signal1_combo = QComboBox()
@@ -563,16 +515,19 @@ class SignalAnalysisDialog(QDialog):
         cross_select_layout.addRow("Signal 1:", self.cross_signal1_combo)
         cross_select_layout.addRow("Signal 2:", self.cross_signal2_combo)
         cross_layout.addLayout(cross_select_layout)
-        
+
         # Cross analysis buttons
         cross_button_layout = QHBoxLayout()
-        
+
         xcorr_btn = QPushButton("Cross Correlation")
         xcorr_btn.clicked.connect(self.show_cross_correlation)
         cross_button_layout.addWidget(xcorr_btn)
-        
+
         cross_layout.addLayout(cross_button_layout)
-        
+
+        explanation_tab = ExplanationTab(self)
+        self.tab_widget.addTab(explanation_tab, "Explanations")
+
         # Results area (initially empty) - shared across tabs
         results_scroll = QScrollArea()
         results_scroll.setWidgetResizable(True)
@@ -580,7 +535,7 @@ class SignalAnalysisDialog(QDialog):
         self.results_layout = QVBoxLayout(self.results_widget)
         results_scroll.setWidget(self.results_widget)
         layout.addWidget(results_scroll)
-        
+
         # Close button
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(self.accept)
@@ -597,17 +552,17 @@ class SignalAnalysisDialog(QDialog):
         """
         if hasattr(self.parent, 'data_signals'):
             signals = list(self.parent.data_signals.keys())
-            
+
             # Update all combo boxes
             self.signal_combo.clear()
             self.signal_combo.addItems(signals)
-            
+
             self.adv_signal_combo.clear()
             self.adv_signal_combo.addItems(signals)
-            
+
             self.cross_signal1_combo.clear()
             self.cross_signal1_combo.addItems(signals)
-            
+
             self.cross_signal2_combo.clear()
             self.cross_signal2_combo.addItems(signals)
 
@@ -624,7 +579,7 @@ class SignalAnalysisDialog(QDialog):
         """
         if combo is None:
             combo = self.signal_combo
-            
+
         signal = combo.currentText()
         if not signal:
             return None
@@ -654,7 +609,51 @@ class SignalAnalysisDialog(QDialog):
         if not signal:
             return
 
-        SignalAnalysisTools.perform_fft_analysis(self.parent, signal)
+        # Get FFT data without creating window
+        time_arr, values, freqs, magnitudes = SignalAnalysisTools.perform_fft_analysis(self.parent, signal)
+
+        # Create a proper window using QMainWindow
+        plot_window = QMainWindow(self)
+        plot_window.setWindowTitle(f"FFT Analysis: {signal}")
+        plot_window.resize(800, 600)
+
+        # Create central widget with layout
+        central_widget = QWidget()
+        layout = QVBoxLayout(central_widget)
+
+        # Create plot widget
+        plot_widget = pg.GraphicsLayoutWidget()
+
+        # Time domain plot
+        p1 = plot_widget.addPlot(row=0, col=0)
+        p1.setTitle("Time Domain")
+        p1.setLabel('left', 'Amplitude')
+        p1.setLabel('bottom', 'Time (s)')
+        p1.plot(time_arr, values, pen='b')
+
+        # Frequency domain plot
+        p2 = plot_widget.addPlot(row=1, col=0)
+        p2.setTitle("Frequency Domain")
+        p2.setLabel('left', 'Magnitude')
+        p2.setLabel('bottom', 'Frequency (Hz)')
+        p2.plot(freqs, magnitudes, pen='r')
+        p2.setLogMode(x=True, y=False)  # Set log scale for better visualization
+
+        # Add close button
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(plot_window.close)
+
+        # Set up layout
+        layout.addWidget(plot_widget)
+        layout.addWidget(close_button)
+        central_widget.setLayout(layout)
+        plot_window.setCentralWidget(central_widget)
+
+        # Show the window
+        plot_window.show()
+
+        # Keep reference to prevent garbage collection
+        self._plot_windows.append(plot_window)
 
     def show_time_analysis(self):
         """Perform time-domain analysis on the selected signal and display results."""
@@ -665,39 +664,51 @@ class SignalAnalysisDialog(QDialog):
         analysis = SignalAnalysisTools.analyze_signal(self.parent, signal)
         self.show_analysis_results("Time Analysis", signal, analysis)
 
-    def show_psd(self):
+    def show_psd_analysis(self):
         """Calculate and display Power Spectral Density for the selected signal."""
         signal = self.get_selected_signal(self.adv_signal_combo)
         if not signal:
             return
 
-        freqs, psd = AdvancedSignalAnalysisTools.calculate_psd(self.parent, signal)
+        freqs, psd, psd_stats = AdvancedSignalAnalysisTools.calculate_psd(self.parent, signal)
 
-        # Create plot window with parent and window flags
-        plot_window = pg.PlotWidget(title=f"Power Spectral Density: {signal}", parent=self)
-        plot_window.setWindowTitle(f"PSD: {signal}")
-        plot_window.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
-        plot_window.setLabel('left', 'Power/Frequency (dB/Hz)')
-        plot_window.setLabel('bottom', 'Frequency (Hz)')
-        plot_window.plot(freqs, 10 * np.log10(psd), pen='b')
+        # Create a proper window using QMainWindow
+        plot_window = QMainWindow(self)
+        plot_window.setWindowTitle(f"Power Spectral Density: {signal}")
         plot_window.resize(800, 600)
+
+        # Create central widget with layout
+        central_widget = QWidget()
+        layout = QVBoxLayout(central_widget)
+
+        # Create plot widget
+        plot_widget = pg.PlotWidget(title=f"Power Spectral Density: {signal}")
+        plot_widget.setLabel('left', 'Power/Frequency (dB/Hz)')
+        plot_widget.setLabel('bottom', 'Frequency (Hz)')
+        plot_widget.plot(freqs, 10 * np.log10(psd), pen='b')
+
+        # Add close button
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(plot_window.close)
+
+        # Set up layout
+        layout.addWidget(plot_widget)
+        layout.addWidget(close_button)
+        central_widget.setLayout(layout)
+        plot_window.setCentralWidget(central_widget)
+
+        # Show the window
         plot_window.show()
-        plot_window.raise_()  # Bring window to front
-        
-        # Keep a reference to prevent garbage collection
+
+        # Keep reference to prevent garbage collection
         self._plot_windows.append(plot_window)
-        
-        # Show summary in results area
-        psd_stats = {
-            "Peak Frequency (Hz)": freqs[np.argmax(psd)],
-            "Max Power (dB)": 10 * np.log10(np.max(psd)),
-            "Total Power": np.sum(psd)
-        }
+
+        # Show PSD statistics
         self.show_analysis_results("PSD Analysis", signal, psd_stats)
 
     def show_autocorrelation(self):
         """Calculate and display autocorrelation of the selected signal."""
-        signal = self.get_selected_signal(self.auto_signal_combo)
+        signal = self.get_selected_signal(self.adv_signal_combo)
         if not signal:
             return
 
@@ -744,46 +755,122 @@ class SignalAnalysisDialog(QDialog):
             return
 
         time_arr, values = self.parent.data_signals[signal]
-        
+
         # Use default parameters for peak detection
         peaks_data = AdvancedSignalAnalysisTools.detect_peaks(
-            self.parent, signal, height=np.mean(values), distance=10)
-        
-        # Create plot to visualize the peaks
-        plot_window = pg.PlotWidget(title=f"Peak Detection: {signal}")
+            self.parent, signal, height=np.mean(values), distance=10
+        )
+
+        # Create a proper window using QMainWindow
+        plot_window = QMainWindow(self)
         plot_window.setWindowTitle(f"Peak Detection: {signal}")
-        plot_window.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
-        plot_window.setLabel('left', 'Amplitude')
-        plot_window.setLabel('bottom', 'Time (s)')
-        
+        plot_window.resize(800, 600)
+
+        # Create central widget with layout
+        central_widget = QWidget()
+        layout = QVBoxLayout(central_widget)
+
+        # Create plot widget
+        plot_widget = pg.PlotWidget(title=f"Peak Detection: {signal}")
+        plot_widget.setLabel('left', 'Amplitude')
+        plot_widget.setLabel('bottom', 'Time (s)')
+
         # Plot the signal
-        plot_window.plot(time_arr, values, pen='b')
-        
+        plot_widget.plot(time_arr, values, pen='b')
+
         # Highlight peaks
         peak_plot = pg.ScatterPlotItem(
-            x=peaks_data["Times"], 
+            x=peaks_data["Times"],
             y=peaks_data["Heights"],
-            symbol='o', 
-            size=10, 
-            pen='r', 
+            symbol='o',
+            size=10,
+            pen='r',
             brush='r'
         )
-        plot_window.addItem(peak_plot)
-        plot_window.resize(800, 600)
+        plot_widget.addItem(peak_plot)
+
+        # Add close button
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(plot_window.close)
+
+        # Set up layout
+        layout.addWidget(plot_widget)
+        layout.addWidget(close_button)
+        central_widget.setLayout(layout)
+        plot_window.setCentralWidget(central_widget)
+
+        # Show the window
         plot_window.show()
-        plot_window.raise_()
-        
-        # Keep a reference to prevent garbage collection
+
+        # Keep reference to prevent garbage collection
         self._plot_windows.append(plot_window)
-        
+
         # Remove the indices and times from display data (too verbose)
-        display_data = {k: v for k, v in peaks_data.items() 
-                      if k not in ["Indices", "Times", "Heights"]}
-        
+        display_data = {k: v for k, v in peaks_data.items()
+                        if k not in ["Indices", "Times", "Heights"]}
+
         self.show_analysis_results("Peak Detection", signal, display_data)
 
+    def show_filtered_signal(self, original_values, filtered_values, filter_type, signal_name):
+        """
+        Display the original and filtered signals in a new window.
+
+        Args:
+            original_values (array): The original signal values.
+            filtered_values (array): The filtered signal values.
+            filter_type (str): The type of filter applied.
+            signal_name (str): The name of the signal.
+        """
+        # Create a new window for displaying the signals
+        plot_window = QMainWindow(self)
+        plot_window.setWindowTitle(f"Filtered Signal: {signal_name} ({filter_type})")
+        plot_window.resize(800, 600)
+
+        # Create central widget with layout
+        central_widget = QWidget()
+        layout = QVBoxLayout(central_widget)
+
+        # Create plot widget
+        plot_widget = pg.GraphicsLayoutWidget()
+
+        # Original signal plot
+        p1 = plot_widget.addPlot(row=0, col=0)
+        p1.setTitle("Original Signal")
+        p1.setLabel('left', 'Amplitude')
+        p1.setLabel('bottom', 'Sample Index')
+        p1.plot(original_values, pen='b', name="Original")
+
+        # Filtered signal plot
+        p2 = plot_widget.addPlot(row=1, col=0)
+        p2.setTitle("Filtered Signal")
+        p2.setLabel('left', 'Amplitude')
+        p2.setLabel('bottom', 'Sample Index')
+        p2.plot(filtered_values, pen='r', name="Filtered")
+
+        # Add close button
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(plot_window.close)
+
+        # Set up layout
+        layout.addWidget(plot_widget)
+        layout.addWidget(close_button)
+        central_widget.setLayout(layout)
+        plot_window.setCentralWidget(central_widget)
+
+        # Show the window
+        plot_window.show()
+
+        # Ensure we have a list to store windows
+        if not hasattr(self, '_plot_windows'):
+            self._plot_windows = []
+
+        # Keep reference to prevent garbage collection
+        self._plot_windows.append(plot_window)
+
     def show_filter_dialog(self):
-        """Show dialog for filter settings and then apply filter."""
+        """Show dialog for filter settings and apply the filter."""
+        from PySide6.QtWidgets import QSpinBox, QGroupBox, QRadioButton, QFormLayout
+
         signal = self.get_selected_signal(self.adv_signal_combo)
         if not signal:
             return
@@ -792,104 +879,116 @@ class SignalAnalysisDialog(QDialog):
         filter_dialog = QDialog(self)
         filter_dialog.setWindowTitle("Filter Settings")
         layout = QVBoxLayout(filter_dialog)
-        
+
         # Filter type
-        filter_type_group = QGroupBox("Filter Type")
-        filter_type_layout = QVBoxLayout()
-        
-        self.lowpass_radio = QRadioButton("Low-pass")
-        self.lowpass_radio.setChecked(True)
-        self.highpass_radio = QRadioButton("High-pass")
-        self.bandpass_radio = QRadioButton("Band-pass")
-        
-        filter_type_layout.addWidget(self.lowpass_radio)
-        filter_type_layout.addWidget(self.highpass_radio)
-        filter_type_layout.addWidget(self.bandpass_radio)
-        filter_type_group.setLayout(filter_type_layout)
-        layout.addWidget(filter_type_group)
-        
-        # Parameters
-        params_layout = QFormLayout()
-        
-        # Get some reasonable defaults based on signal
-        time_arr, _ = self.parent.data_signals[signal]
-        fs = 1 / np.mean(np.diff(time_arr))
-        nyq = fs / 2
-        
-        self.cutoff_low = QDoubleSpinBox()
-        self.cutoff_low.setRange(0, nyq)
-        self.cutoff_low.setValue(nyq / 10)  # Default to 10% of Nyquist
-        self.cutoff_low.setSuffix(" Hz")
-        
-        self.cutoff_high = QDoubleSpinBox()
-        self.cutoff_high.setRange(0, nyq)
-        self.cutoff_high.setValue(nyq / 2)  # Default to 50% of Nyquist
-        self.cutoff_high.setSuffix(" Hz")
-        
-        self.filter_order = QDoubleSpinBox()
-        self.filter_order.setRange(1, 10)
-        self.filter_order.setValue(4)
-        self.filter_order.setDecimals(0)
-        
-        params_layout.addRow("Low Cutoff:", self.cutoff_low)
-        params_layout.addRow("High Cutoff:", self.cutoff_high)
-        params_layout.addRow("Filter Order:", self.filter_order)
-        layout.addLayout(params_layout)
-        
+        filter_type_lowpass = QRadioButton("Lowpass")
+        filter_type_highpass = QRadioButton("Highpass")
+        filter_type_bandpass = QRadioButton("Bandpass")
+        filter_type_lowpass.setChecked(True)
+
+        filter_group = QGroupBox("Filter Type")
+        filter_layout = QVBoxLayout(filter_group)
+        filter_layout.addWidget(filter_type_lowpass)
+        filter_layout.addWidget(filter_type_highpass)
+        filter_layout.addWidget(filter_type_bandpass)
+        layout.addWidget(filter_group)
+
+        # Filter parameters
+        params_group = QGroupBox("Filter Parameters")
+        params_layout = QFormLayout(params_group)
+
+        cutoff_low_spin = QDoubleSpinBox()
+        cutoff_low_spin.setRange(0.1, 1000)
+        cutoff_low_spin.setValue(10)
+        cutoff_low_spin.setSuffix(" Hz")
+
+        cutoff_high_spin = QDoubleSpinBox()
+        cutoff_high_spin.setRange(0.1, 1000)
+        cutoff_high_spin.setValue(100)
+        cutoff_high_spin.setSuffix(" Hz")
+        cutoff_high_spin.setEnabled(filter_type_bandpass.isChecked())
+
+        filter_order_spin = QSpinBox()
+        filter_order_spin.setRange(1, 10)
+        filter_order_spin.setValue(4)
+
+        params_layout.addRow("Cutoff Frequency (Low):", cutoff_low_spin)
+        params_layout.addRow("Cutoff Frequency (High):", cutoff_high_spin)
+        params_layout.addRow("Filter Order:", filter_order_spin)
+
         # Enable/disable high cutoff based on filter type
-        def update_high_cutoff():
-            self.cutoff_high.setEnabled(self.bandpass_radio.isChecked())
-        
-        self.lowpass_radio.toggled.connect(update_high_cutoff)
-        self.highpass_radio.toggled.connect(update_high_cutoff)
-        self.bandpass_radio.toggled.connect(update_high_cutoff)
-        update_high_cutoff()
-        
-        # Apply button
-        apply_btn = QPushButton("Apply Filter")
-        apply_btn.clicked.connect(lambda: self.apply_filter(signal, filter_dialog))
-        layout.addWidget(apply_btn)
-        
+        filter_type_bandpass.toggled.connect(cutoff_high_spin.setEnabled)
+
+        layout.addWidget(params_group)
+
+        # Buttons
+        buttons_layout = QHBoxLayout()
+        apply_btn = QPushButton("Apply")
+        cancel_btn = QPushButton("Cancel")
+        buttons_layout.addWidget(apply_btn)
+        buttons_layout.addWidget(cancel_btn)
+        layout.addLayout(buttons_layout)
+
+        def apply_filter():
+            if filter_type_lowpass.isChecked():
+                filter_type = 'lowpass'
+            elif filter_type_highpass.isChecked():
+                filter_type = 'highpass'
+            else:
+                filter_type = 'bandpass'
+
+            cutoff_low = cutoff_low_spin.value()
+            cutoff_high = cutoff_high_spin.value() if filter_type == 'bandpass' else None
+            order = int(filter_order_spin.value())
+
+            try:
+                # Get signal data
+                time_arr, values = self.parent.data_signals[signal]
+
+                # Calculate Nyquist frequency
+                sampling_rate = 1 / np.mean(np.diff(time_arr))
+                nyquist = 0.5 * sampling_rate
+
+                # Normalize cutoff frequencies
+                normalized_cutoff_low = cutoff_low / nyquist
+                normalized_cutoff_high = cutoff_high / nyquist if cutoff_high else None
+
+                # Validate cutoff frequencies
+                if not (0 < normalized_cutoff_low < 1):
+                    raise ValueError("Low cutoff frequency must be within (0, Nyquist).")
+                if filter_type == 'bandpass' and not (0 < normalized_cutoff_high < 1):
+                    raise ValueError("High cutoff frequency must be within (0, Nyquist).")
+
+                # Apply Butterworth filter
+                if filter_type == 'lowpass':
+                    b, a = butter(order, normalized_cutoff_low, btype='low')
+                elif filter_type == 'highpass':
+                    b, a = butter(order, normalized_cutoff_low, btype='high')
+                elif filter_type == 'bandpass':
+                    b, a = butter(order, [normalized_cutoff_low, normalized_cutoff_high], btype='band')
+
+                # Filter the signal
+                original_values = values.copy()
+                filtered_values = filtfilt(b, a, values)
+
+                # Display results
+                self.show_filtered_signal(original_values, filtered_values, filter_type, signal)
+                filter_info = {
+                    "Filter Type": filter_type,
+                    "Cutoff Low": cutoff_low,
+                    "Cutoff High": cutoff_high if filter_type == 'bandpass' else "N/A",
+                    "Order": order
+                }
+                self.show_analysis_results("Filter Results", signal, filter_info)
+                filter_dialog.accept()
+            except Exception as e:
+                print(f"Error applying filter: {e}")
+                filter_dialog.reject()
+
+        apply_btn.clicked.connect(apply_filter)
+        cancel_btn.clicked.connect(filter_dialog.reject)
+
         filter_dialog.exec()
-
-    def apply_filter(self, signal, dialog):
-        """Apply the configured filter to the signal."""
-        if self.lowpass_radio.isChecked():
-            filter_type = 'lowpass'
-        elif self.highpass_radio.isChecked():
-            filter_type = 'highpass'
-        else:
-            filter_type = 'bandpass'
-        
-        cutoff_low = self.cutoff_low.value()
-        cutoff_high = self.cutoff_high.value() if filter_type == 'bandpass' else None
-        order = int(self.filter_order.value())
-        
-        time_arr, filtered = AdvancedSignalAnalysisTools.apply_filter(
-            self.parent, signal, filter_type, cutoff_low, cutoff_high, order)
-            
-        # Plot original vs filtered signal
-        plot_window = pg.PlotWidget(title=f"Filtered Signal: {signal}")
-        plot_window.setWindowTitle(f"Filtered Signal: {signal}")
-        plot_window.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
-        plot_window.setLabel('left', 'Amplitude')
-        plot_window.setLabel('bottom', 'Time (s)')
-        
-        # Original signal in light color
-        orig_values = self.parent.data_signals[signal][1]
-        plot_window.plot(time_arr, orig_values, pen=pg.mkPen('b', width=1, alpha=100), name="Original")
-        
-        # Filtered signal in dark color
-        plot_window.plot(time_arr, filtered, pen=pg.mkPen('r', width=2), name="Filtered")
-        plot_window.addLegend()
-        plot_window.resize(800, 600)
-        plot_window.show()
-        plot_window.raise_()
-
-        # Keep a reference to prevent garbage collection
-        self._plot_windows.append(plot_window)
-
-        dialog.accept()
 
     def show_hilbert_transform(self):
         """Calculate and display Hilbert transform results for the selected signal."""
@@ -899,13 +998,20 @@ class SignalAnalysisDialog(QDialog):
 
         results = AdvancedSignalAnalysisTools.hilbert_transform(self.parent, signal)
 
-        # Create plot window with multiple plots
-        plot_window = pg.GraphicsLayoutWidget(title=f"Hilbert Transform: {signal}")
+        # Create a proper window using QMainWindow
+        plot_window = QMainWindow(self)
         plot_window.setWindowTitle(f"Hilbert Transform: {signal}")
-        plot_window.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
+        plot_window.resize(800, 600)
+
+        # Create central widget with layout
+        central_widget = QWidget()
+        layout = QVBoxLayout(central_widget)
+
+        # Create GraphicsLayoutWidget for plots
+        plot_widget = pg.GraphicsLayoutWidget()
 
         # Original signal plot
-        p1 = plot_window.addPlot(row=0, col=0)
+        p1 = plot_widget.addPlot(row=0, col=0)
         p1.setTitle("Original Signal with Envelope")
         p1.setLabel('left', 'Amplitude')
         p1.setLabel('bottom', 'Time (s)')
@@ -916,22 +1022,33 @@ class SignalAnalysisDialog(QDialog):
         p1.addLegend()
 
         # Phase plot
-        p2 = plot_window.addPlot(row=1, col=0)
+        p2 = plot_widget.addPlot(row=1, col=0)
         p2.setTitle("Instantaneous Phase")
         p2.setLabel('left', 'Phase (rad)')
         p2.setLabel('bottom', 'Time (s)')
         p2.plot(results["phase"][0], results["phase"][1], pen='g')
 
         # Frequency plot
-        p3 = plot_window.addPlot(row=2, col=0)
+        p3 = plot_widget.addPlot(row=2, col=0)
         p3.setTitle("Instantaneous Frequency")
         p3.setLabel('left', 'Frequency (Hz)')
         p3.setLabel('bottom', 'Time (s)')
         p3.plot(results["frequency"][0], results["frequency"][1], pen='y')
 
-        plot_window.resize(800, 600)
+        # Add close button
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(plot_window.close)
+
+        # Set up layout
+        layout.addWidget(plot_widget)
+        layout.addWidget(close_button)
+        central_widget.setLayout(layout)
+        plot_window.setCentralWidget(central_widget)
+
+        # Show the window
         plot_window.show()
-        plot_window.raise_()
+
+        # Keep reference to prevent garbage collection
         self._plot_windows.append(plot_window)
 
         # Show summary in results area
@@ -949,21 +1066,39 @@ class SignalAnalysisDialog(QDialog):
 
         interval_centers, energy = AdvancedSignalAnalysisTools.energy_in_intervals(self.parent, signal)
 
-        # Create plot window
-        plot_window = pg.PlotWidget(title=f"Energy Analysis: {signal}")
+        # Create a proper window using QMainWindow
+        plot_window = QMainWindow(self)
         plot_window.setWindowTitle(f"Energy Analysis: {signal}")
-        plot_window.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
-        plot_window.setLabel('left', 'Energy')
-        plot_window.setLabel('bottom', 'Time (s)')
+        plot_window.resize(800, 600)
+
+        # Create central widget with layout
+        central_widget = QWidget()
+        layout = QVBoxLayout(central_widget)
+
+        # Create plot widget
+        plot_widget = pg.PlotWidget(title=f"Energy Analysis: {signal}")
+        plot_widget.setLabel('left', 'Energy')
+        plot_widget.setLabel('bottom', 'Time (s)')
 
         # Plot energy distribution as bar graph
-        bar_graph = pg.BarGraphItem(x=interval_centers, height=energy,
-                                    width=interval_centers[1] - interval_centers[0] if len(
-                                        interval_centers) > 1 else 0.1, brush='b')
-        plot_window.addItem(bar_graph)
-        plot_window.resize(800, 600)
+        bar_width = interval_centers[1] - interval_centers[0] if len(interval_centers) > 1 else 0.1
+        bar_graph = pg.BarGraphItem(x=interval_centers, height=energy, width=bar_width, brush='b')
+        plot_widget.addItem(bar_graph)
+
+        # Add close button
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(plot_window.close)
+
+        # Set up layout
+        layout.addWidget(plot_widget)
+        layout.addWidget(close_button)
+        central_widget.setLayout(layout)
+        plot_window.setCentralWidget(central_widget)
+
+        # Show the window
         plot_window.show()
-        plot_window.raise_()
+
+        # Keep reference to prevent garbage collection
         self._plot_windows.append(plot_window)
 
         # Calculate statistics on energy distribution
@@ -984,16 +1119,35 @@ class SignalAnalysisDialog(QDialog):
 
         time_arr, phase, phase_stats = AdvancedSignalAnalysisTools.phase_analysis(self.parent, signal)
 
-        # Create plot window
-        plot_window = pg.PlotWidget(title=f"Phase Analysis: {signal}")
+        # Create a proper window using QMainWindow
+        plot_window = QMainWindow(self)
         plot_window.setWindowTitle(f"Phase Analysis: {signal}")
-        plot_window.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
-        plot_window.setLabel('left', 'Phase (rad)')
-        plot_window.setLabel('bottom', 'Time (s)')
-        plot_window.plot(time_arr, phase, pen='b')
         plot_window.resize(800, 600)
+
+        # Create central widget with layout
+        central_widget = QWidget()
+        layout = QVBoxLayout(central_widget)
+
+        # Create plot widget
+        plot_widget = pg.PlotWidget(title=f"Phase Analysis: {signal}")
+        plot_widget.setLabel('left', 'Phase (rad)')
+        plot_widget.setLabel('bottom', 'Time (s)')
+        plot_widget.plot(time_arr, phase, pen='b')
+
+        # Add close button
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(plot_window.close)
+
+        # Set up layout
+        layout.addWidget(plot_widget)
+        layout.addWidget(close_button)
+        central_widget.setLayout(layout)
+        plot_window.setCentralWidget(central_widget)
+
+        # Show the window
         plot_window.show()
-        plot_window.raise_()
+
+        # Keep reference to prevent garbage collection
         self._plot_windows.append(plot_window)
 
         self.show_analysis_results("Phase Analysis", signal, phase_stats)
@@ -1006,16 +1160,35 @@ class SignalAnalysisDialog(QDialog):
 
         quefrency, cepstrum = AdvancedSignalAnalysisTools.cepstrum_analysis(self.parent, signal)
 
-        # Create plot window
-        plot_window = pg.PlotWidget(title=f"Cepstrum Analysis: {signal}")
+        # Create a proper window using QMainWindow
+        plot_window = QMainWindow(self)
         plot_window.setWindowTitle(f"Cepstrum Analysis: {signal}")
-        plot_window.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
-        plot_window.setLabel('left', 'Amplitude')
-        plot_window.setLabel('bottom', 'Quefrency (s)')
-        plot_window.plot(quefrency, cepstrum, pen='b')
         plot_window.resize(800, 600)
+
+        # Create central widget with layout
+        central_widget = QWidget()
+        layout = QVBoxLayout(central_widget)
+
+        # Create plot widget
+        plot_widget = pg.PlotWidget(title=f"Cepstrum Analysis: {signal}")
+        plot_widget.setLabel('left', 'Amplitude')
+        plot_widget.setLabel('bottom', 'Quefrency (s)')
+        plot_widget.plot(quefrency, cepstrum, pen='b')
+
+        # Add close button
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(plot_window.close)
+
+        # Set up layout
+        layout.addWidget(plot_widget)
+        layout.addWidget(close_button)
+        central_widget.setLayout(layout)
+        plot_window.setCentralWidget(central_widget)
+
+        # Show the window
         plot_window.show()
-        plot_window.raise_()
+
+        # Keep reference to prevent garbage collection
         self._plot_windows.append(plot_window)
 
         # Find maximum in cepstrum (excluding the first bin)
@@ -1030,7 +1203,7 @@ class SignalAnalysisDialog(QDialog):
         self.show_analysis_results("Cepstrum Analysis", signal, cepstrum_stats)
 
     def show_wavelet_dialog(self):
-        """Show dialog for wavelet transform configuration and then perform the transform."""
+        """Show dialog for wavelet transform settings."""
         signal = self.get_selected_signal(self.adv_signal_combo)
         if not signal:
             return
@@ -1040,25 +1213,32 @@ class SignalAnalysisDialog(QDialog):
         wavelet_dialog.setWindowTitle("Wavelet Transform Settings")
         layout = QVBoxLayout(wavelet_dialog)
 
-        # Wavelet type selection
-        wavelet_form = QFormLayout()
+        # Wavelet type
+        form_layout = QFormLayout()
         self.wavelet_combo = QComboBox()
-        self.wavelet_combo.addItems(['db4', 'db8', 'sym4', 'sym8', 'coif4', 'haar'])
-        wavelet_form.addRow("Wavelet Type:", self.wavelet_combo)
+        self.wavelet_combo.addItems(["db4", "db8", "sym4", "sym8", "coif1", "coif3", "haar"])
+        form_layout.addRow("Wavelet Type:", self.wavelet_combo)
 
         # Decomposition level
         self.level_spin = QDoubleSpinBox()
-        self.level_spin.setRange(1, 10)
-        self.level_spin.setValue(5)
         self.level_spin.setDecimals(0)
-        wavelet_form.addRow("Decomposition Level:", self.level_spin)
+        self.level_spin.setMinimum(1)
+        self.level_spin.setMaximum(10)
+        self.level_spin.setValue(5)
+        form_layout.addRow("Decomposition Level:", self.level_spin)
 
-        layout.addLayout(wavelet_form)
+        layout.addLayout(form_layout)
 
-        # Apply button
-        apply_btn = QPushButton("Apply Transform")
+        # Buttons
+        buttons_layout = QHBoxLayout()
+        apply_btn = QPushButton("Apply")
         apply_btn.clicked.connect(lambda: self.apply_wavelet_transform(signal, wavelet_dialog))
-        layout.addWidget(apply_btn)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(wavelet_dialog.reject)
+
+        buttons_layout.addWidget(apply_btn)
+        buttons_layout.addWidget(cancel_btn)
+        layout.addLayout(buttons_layout)
 
         wavelet_dialog.exec()
 
@@ -1241,3 +1421,669 @@ def show_analysis_dialog(parent):
     # Create and show the dialog
     dialog = SignalAnalysisDialog(parent)
     dialog.exec()
+
+
+class ExplanationTab(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setup_ui()
+
+    def setup_ui(self):
+        # Main layout
+        main_layout = QVBoxLayout(self)
+
+        # Create scrollable area for buttons
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+
+        # Create button groups
+        self.create_button_groups(scroll_layout)
+
+        scroll_area.setWidget(scroll_content)
+        main_layout.addWidget(scroll_area)
+
+        # Help text display area
+        self.help_text = QTextEdit()
+        self.help_text.setReadOnly(True)
+        self.help_text.setMinimumHeight(200)
+        main_layout.addWidget(self.help_text)
+
+        # Show default help text
+        self.show_default_help()
+
+    def create_button_groups(self, parent_layout):
+        # Basic Analysis group
+        basic_group = QGroupBox("Basic Analysis")
+        basic_layout = QGridLayout()
+
+        basic_buttons = [
+            "Statistics", "FFT Analysis", "Time Domain Analysis"
+        ]
+
+        self.add_buttons_to_grid(basic_layout, basic_buttons)
+        basic_group.setLayout(basic_layout)
+        parent_layout.addWidget(basic_group)
+
+        # Advanced Analysis group
+        advanced_group = QGroupBox("Advanced Analysis")
+        advanced_layout = QGridLayout()
+
+        advanced_buttons = [
+            "Power Spectral Density", "Autocorrelation", "Peak Detection",
+            "Hilbert Transform", "Energy Analysis", "Phase Analysis", "Cepstral Analysis"
+        ]
+
+        self.add_buttons_to_grid(advanced_layout, advanced_buttons)
+        advanced_group.setLayout(advanced_layout)
+        parent_layout.addWidget(advanced_group)
+
+        # Cross Analysis group
+        cross_group = QGroupBox("Cross Analysis")
+        cross_layout = QGridLayout()
+
+        cross_buttons = ["Cross-Correlation"]
+
+        self.add_buttons_to_grid(cross_layout, cross_buttons)
+        cross_group.setLayout(cross_layout)
+        parent_layout.addWidget(cross_group)
+
+        # Filtering group
+        filter_group = QGroupBox("Filtering")
+        filter_layout = QGridLayout()
+
+        filter_buttons = ["Lowpass Filter", "Highpass Filter", "Bandpass Filter"]
+
+        self.add_buttons_to_grid(filter_layout, filter_buttons)
+        filter_group.setLayout(filter_layout)
+        parent_layout.addWidget(filter_group)
+
+        # Wavelet Analysis group
+        wavelet_group = QGroupBox("Wavelet Analysis")
+        wavelet_layout = QGridLayout()
+
+        wavelet_buttons = ["Wavelet Transform", "Wavelet Types", "Wavelet Applications"]
+
+        self.add_buttons_to_grid(wavelet_layout, wavelet_buttons)
+        wavelet_group.setLayout(wavelet_layout)
+        parent_layout.addWidget(wavelet_group)
+
+    def add_buttons_to_grid(self, layout, button_texts, cols=3):
+        for i, text in enumerate(button_texts):
+            button = QPushButton(text)
+            button.clicked.connect(lambda checked, t=text: self.show_help(t))
+            row, col = divmod(i, cols)
+            layout.addWidget(button, row, col)
+
+    def show_default_help(self):
+        self.help_text.setHtml("""
+        <h3>Signal Analysis Help</h3>
+        <p>Click on any button above to see detailed information about that analysis method.</p>
+        <p>This help section will explain:</p>
+        <ul>
+            <li>What the analysis method does</li>
+            <li>When to use it</li>
+            <li>Limitations and considerations</li>
+            <li>How to interpret the results</li>
+        </ul>
+        """)
+
+    def show_help(self, topic):
+        """Display help content for the selected topic."""
+        # Dictionary of help content for each topic
+        help_content = {
+            "Statistics": """
+                <h3>Basic Signal Statistics</h3>
+                <p>Basic statistics provide fundamental insights about the signal's characteristics:</p>
+                <ul>
+                    <li><b>Mean:</b> The average value of the signal, indicating central tendency.
+                        <br>Formula: μ = (1/N)·∑x(i)</li>
+                    <li><b>Median:</b> The middle value when signal values are ordered, less affected by outliers than mean.</li>
+                    <li><b>Minimum/Maximum:</b> The smallest and largest values in the signal.</li>
+                    <li><b>Range:</b> The difference between maximum and minimum values.</li>
+                    <li><b>Standard Deviation:</b> Measures the amount of variation or dispersion in the signal.
+                        <br>Formula: σ = √[(1/N)·∑(x(i)-μ)²]</li>
+                    <li><b>Variance:</b> Square of standard deviation, measures signal power variation around the mean.</li>
+                    <li><b>Root Mean Square (RMS):</b> Square root of the average of squared values, relates to signal energy.
+                        <br>Formula: RMS = √[(1/N)·∑x(i)²]</li>
+                    <li><b>Skewness:</b> Measures asymmetry of the signal distribution. Positive values indicate right-tailed distribution.</li>
+                    <li><b>Kurtosis:</b> Measures the "tailedness" of the distribution (peakedness/flatness).
+                        <br>Higher values indicate more extreme outliers.</li>
+                    <li><b>Interquartile Range (IQR):</b> The range between the 25th and 75th percentiles, robust to outliers.</li>
+                </ul>
+                <p><b>When to use:</b> These statistics provide a basic quantitative description of your signal and can identify potential issues or characteristics.</p>
+            """,
+
+            "FFT Analysis": """
+                <h3>FFT Analysis</h3>
+                <p>Fast Fourier Transform converts a signal from the time domain to the frequency domain:</p>
+                <ul>
+                    <li><b>Purpose:</b> Identifies frequency components present in the signal.</li>
+                    <li><b>Usage:</b> Detect periodic patterns, dominant frequencies, and harmonic content.</li>
+                    <li><b>Mathematical basis:</b> Decomposes a signal into a sum of sinusoids of different frequencies.</li>
+                </ul>
+                <p><b>Interpretation:</b> 
+                    <ul>
+                        <li>Peaks in the frequency spectrum indicate strong periodic components at those frequencies.</li>
+                        <li>Broader peaks suggest frequency variation or modulation.</li>
+                        <li>Evenly spaced harmonics indicate a complex periodic signal.</li>
+                    </ul>
+                </p>
+                <p><b>Limitations:</b>
+                    <ul>
+                        <li>Assumes signal stationarity (frequency content doesn't change over time).</li>
+                        <li>May not capture time-varying frequency content.</li>
+                        <li>Subject to spectral leakage if signal period doesn't match window size.</li>
+                        <li>Limited frequency resolution for short signals.</li>
+                    </ul>
+                </p>
+            """,
+
+            "Time Domain Analysis": """
+                <h3>Time Domain Analysis</h3>
+                <p>Examines signal characteristics directly in the time domain:</p>
+                <ul>
+                    <li><b>Duration:</b> Total time span of the signal.</li>
+                    <li><b>Sample Rate:</b> Number of samples per second.</li>
+                    <li><b>Zero Crossings:</b> Number of times the signal crosses the zero level, related to frequency content.</li>
+                    <li><b>Signal Energy:</b> Sum of squared sample values (∑x²), represents total energy contained in the signal.</li>
+                    <li><b>Signal Power:</b> Average power of the signal over time (energy/duration).</li>
+                    <li><b>Crest Factor:</b> Ratio of peak value to RMS value, indicates signal impulsiveness.
+                        <br>High values suggest transients or impulses.</li>
+                </ul>
+                <p><b>When to use:</b> For initial signal characterization, identifying abrupt changes, assessing signal quality, or determining appropriate processing methods.</p>
+                <p><b>Limitations:</b> May not easily reveal frequency-related information or subtle patterns that frequency analysis would highlight.</p>
+            """,
+
+            "Power Spectral Density": """
+                <h3>Power Spectral Density (PSD)</h3>
+                <p>Measures how signal power is distributed across frequency:</p>
+                <ul>
+                    <li><b>Purpose:</b> Shows which frequencies contain the signal's power.</li>
+                    <li><b>Usage:</b> Identify dominant frequencies, noise sources, or resonance.</li>
+                    <li><b>Formula:</b> Squared magnitude of the Fourier transform, normalized by signal length.</li>
+                    <li><b>Units:</b> Power per frequency (e.g., V²/Hz).</li>
+                </ul>
+                <p><b>Interpretation:</b> 
+                    <ul>
+                        <li>Areas with high PSD values indicate frequency bands that contribute significantly to the signal's power.</li>
+                        <li>Peak width indicates stability of frequency component (narrower = more stable).</li>
+                        <li>Log scale often used to visualize both strong and weak components.</li>
+                    </ul>
+                </p>
+                <p><b>Limitations:</b>
+                    <ul> 
+                        <li>Resolution depends on signal length and windowing.</li>
+                        <li>Assumes signal is statistically stationary.</li>
+                        <li>Averaging may be needed for noisy signals.</li>
+                    </ul>
+                </p>
+            """,
+
+            "Autocorrelation": """
+                <h3>Autocorrelation</h3>
+                <p>Measures similarity between a signal and a time-shifted version of itself:</p>
+                <ul>
+                    <li><b>Purpose:</b> Detect repeating patterns, periodicities, or signal memory.</li>
+                    <li><b>Usage:</b> Find hidden periodicities, estimate fundamental frequency, detect signal redundancy.</li>
+                    <li><b>Formula:</b> R(τ) = E[x(t)·x(t-τ)], where τ is the time lag.</li>
+                </ul>
+                <p><b>Interpretation:</b>
+                    <ul>
+                        <li>Peak at zero lag (always present) represents signal energy.</li>
+                        <li>Secondary peaks indicate periodic components.</li>
+                        <li>Distance between peaks represents period of repetitive pattern.</li>
+                        <li>Decay rate indicates "memory" in the signal (how quickly it becomes uncorrelated with itself).</li>
+                    </ul>
+                </p>
+                <p><b>Limitations:</b>
+                    <ul>
+                        <li>May be affected by noise or trends in the signal.</li>
+                        <li>Multiple periodicities can create complex patterns that are difficult to interpret.</li>
+                        <li>Requires sufficient signal length to detect long-period patterns.</li>
+                    </ul>
+                </p>
+            """,
+
+            "Peak Detection": """
+                <h3>Peak Detection</h3>
+                <p>Identifies local maxima (peaks) in the signal:</p>
+                <ul>
+                    <li><b>Purpose:</b> Locate significant events or features in the signal.</li>
+                    <li><b>Usage:</b> Count events, measure intervals between events, identify important signal points.</li>
+                    <li><b>Parameters:</b>
+                        <ul>
+                            <li><b>Height threshold:</b> Minimum amplitude to be considered a peak.</li>
+                            <li><b>Distance:</b> Minimum separation between adjacent peaks.</li>
+                        </ul>
+                    </li>
+                </ul>
+                <p><b>Applications:</b>
+                    <ul>
+                        <li>Heartbeat detection in ECG signals.</li>
+                        <li>Event counting in sensor data.</li>
+                        <li>Pulse detection in various signals.</li>
+                        <li>Peak analysis in spectral data.</li>
+                    </ul>
+                </p>
+                <p><b>Limitations:</b>
+                    <ul>
+                        <li>Sensitivity to threshold settings and noise.</li>
+                        <li>May miss closely spaced peaks due to distance parameter.</li>
+                        <li>Difficulty with very broad or asymmetric peaks.</li>
+                        <li>Baseline drift can affect detection accuracy.</li>
+                    </ul>
+                </p>
+            """,
+
+            "Lowpass Filter": """
+                <h3>Lowpass Filter</h3>
+                <p>Allows low-frequency components to pass while attenuating high frequencies:</p>
+                <ul>
+                    <li><b>Purpose:</b> Remove high-frequency noise or isolate low-frequency trends.</li>
+                    <li><b>Parameters:</b>
+                        <ul>
+                            <li><b>Cutoff frequency:</b> Frequency above which signals are attenuated.</li>
+                            <li><b>Filter order:</b> Controls steepness of transition (higher = steeper).</li>
+                        </ul>
+                    </li>
+                    <li><b>Applications:</b>
+                        <ul>
+                            <li>Noise reduction</li>
+                            <li>Smoothing signals</li>
+                            <li>Extracting slow trends</li>
+                            <li>Anti-aliasing before downsampling</li>
+                        </ul>
+                    </li>
+                </ul>
+                <p><b>Interpretation:</b> After filtering, the signal will appear smoother, with rapid changes removed.</p>
+                <p><b>Limitations:</b>
+                    <ul>
+                        <li>May introduce phase distortion or time delays.</li>
+                        <li>Higher order filters can cause ringing artifacts.</li>
+                        <li>Cannot selectively preserve high-frequency features.</li>
+                        <li>Choice of cutoff frequency is critical for retaining important information.</li>
+                    </ul>
+                </p>
+            """,
+
+            "Highpass Filter": """
+                <h3>Highpass Filter</h3>
+                <p>Allows high-frequency components to pass while attenuating low frequencies:</p>
+                <ul>
+                    <li><b>Purpose:</b> Remove baseline drift or isolate rapid changes in signals.</li>
+                    <li><b>Parameters:</b>
+                        <ul>
+                            <li><b>Cutoff frequency:</b> Frequency below which signals are attenuated.</li>
+                            <li><b>Filter order:</b> Controls steepness of transition (higher = steeper).</li>
+                        </ul>
+                    </li>
+                    <li><b>Applications:</b>
+                        <ul>
+                            <li>Removing DC offset or drift</li>
+                            <li>Detecting edges or rapid transitions</li>
+                            <li>Isolating high-frequency events</li>
+                            <li>AC coupling in electronic signals</li>
+                        </ul>
+                    </li>
+                </ul>
+                <p><b>Interpretation:</b> After filtering, only rapid changes and high-frequency components remain; slow trends are removed.</p>
+                <p><b>Limitations:</b>
+                    <ul>
+                        <li>May introduce phase distortion.</li>
+                        <li>Can remove important low-frequency information.</li>
+                        <li>May amplify high-frequency noise.</li>
+                        <li>Can create artifact "ringing" around sharp transitions.</li>
+                    </ul>
+                </p>
+            """,
+
+            "Bandpass Filter": """
+                <h3>Bandpass Filter</h3>
+                <p>Allows frequencies within a specific band to pass while attenuating others:</p>
+                <ul>
+                    <li><b>Purpose:</b> Isolate specific frequency components or remove noise outside a frequency band.</li>
+                    <li><b>Parameters:</b>
+                        <ul>
+                            <li><b>Lower cutoff:</b> Lower boundary of the passband.</li>
+                            <li><b>Upper cutoff:</b> Upper boundary of the passband.</li>
+                            <li><b>Filter order:</b> Controls steepness of transitions.</li>
+                        </ul>
+                    </li>
+                    <li><b>Applications:</b>
+                        <ul>
+                            <li>Isolating specific frequency bands (e.g., alpha waves in EEG)</li>
+                            <li>Extracting signals in noisy environments</li>
+                            <li>Communication channel selection</li>
+                            <li>Musical instrument or voice isolation</li>
+                        </ul>
+                    </li>
+                </ul>
+                <p><b>Interpretation:</b> After filtering, only components within the specified frequency band remain.</p>
+                <p><b>Limitations:</b>
+                    <ul>
+                        <li>Requires accurate knowledge of the frequency band of interest.</li>
+                        <li>Narrow bandpass filters can cause significant signal distortion.</li>
+                        <li>May introduce phase shifts or time delays.</li>
+                        <li>May create ringing artifacts, especially with high filter orders.</li>
+                    </ul>
+                </p>
+            """,
+
+            "Hilbert Transform": """
+                <h3>Hilbert Transform</h3>
+                <p>Creates the analytic signal and extracts instantaneous attributes:</p>
+                <ul>
+                    <li><b>Purpose:</b> Extract amplitude envelope, instantaneous phase, and frequency.</li>
+                    <li><b>Usage:</b> Analyze modulated signals, extract signal envelope, frequency modulation analysis.</li>
+                    <li><b>Components produced:</b>
+                        <ul>
+                            <li><b>Amplitude envelope:</b> Instantaneous amplitude of the signal.</li>
+                            <li><b>Instantaneous phase:</b> Phase angle of the analytic signal.</li>
+                            <li><b>Instantaneous frequency:</b> Rate of change of the phase.</li>
+                        </ul>
+                    </li>
+                </ul>
+                <p><b>Applications:</b>
+                    <ul>
+                        <li>Demodulation of AM signals</li>
+                        <li>Analysis of frequency modulation</li>
+                        <li>Extracting temporal structure in complex signals</li>
+                        <li>Speech and audio processing</li>
+                    </ul>
+                </p>
+                <p><b>Limitations:</b>
+                    <ul>
+                        <li>Best suited for narrowband signals (limited frequency range).</li>
+                        <li>Instantaneous frequency may be difficult to interpret for broadband signals.</li>
+                        <li>Edge effects at signal boundaries.</li>
+                        <li>Phase unwrapping may introduce errors in instantaneous frequency.</li>
+                    </ul>
+                </p>
+            """,
+
+            "Energy Analysis": """
+                <h3>Energy Analysis</h3>
+                <p>Examines how signal energy is distributed over time intervals:</p>
+                <ul>
+                    <li><b>Purpose:</b> Identify energy variations over time, detect events or changes in signal activity.</li>
+                    <li><b>Calculation:</b> Energy in interval = sum of squared values within each time window.</li>
+                    <li><b>Applications:</b>
+                        <ul>
+                            <li>Speech segment detection</li>
+                            <li>Activity monitoring in sensors</li>
+                            <li>Transient detection</li>
+                            <li>Signal quality assessment over time</li>
+                        </ul>
+                    </li>
+                </ul>
+                <p><b>Interpretation:</b>
+                    <ul>
+                        <li>High energy intervals indicate greater signal activity or amplitude.</li>
+                        <li>Sudden changes in energy can indicate events or transitions.</li>
+                        <li>Energy distribution can reveal patterns in signal activity over time.</li>
+                    </ul>
+                </p>
+                <p><b>Limitations:</b>
+                    <ul>
+                        <li>Results depend on interval size choice (too small: noisy results, too large: temporal details lost).</li>
+                        <li>May be sensitive to outliers or noise spikes.</li>
+                        <li>Doesn't preserve frequency information.</li>
+                        <li>May miss low-amplitude but important signal features.</li>
+                    </ul>
+                </p>
+            """,
+
+            "Phase Analysis": """
+                <h3>Phase Analysis</h3>
+                <p>Studies the phase behavior of a signal:</p>
+                <ul>
+                    <li><b>Purpose:</b> Understand angular position in oscillations, detect phase shifts or synchronization.</li>
+                    <li><b>Calculation:</b> Extracts phase angle from analytic signal via Hilbert transform.</li>
+                    <li><b>Key metrics:</b>
+                        <ul>
+                            <li><b>Phase consistency:</b> How stable the phase progression is.</li>
+                            <li><b>Phase velocity:</b> Rate of phase change (related to frequency).</li>
+                            <li><b>Phase jumps:</b> Sudden changes in phase that may indicate events.</li>
+                        </ul>
+                    </li>
+                </ul>
+                <p><b>Applications:</b>
+                    <ul>
+                        <li>Brain connectivity analysis (phase synchronization)</li>
+                        <li>Communication signal demodulation</li>
+                        <li>Mechanical vibration analysis</li>
+                        <li>Detecting coherence between signals</li>
+                    </ul>
+                </p>
+                <p><b>Limitations:</b>
+                    <ul>
+                        <li>Phase unwrapping may introduce artifacts in long signals.</li>
+                        <li>Interpretation can be challenging for broadband signals.</li>
+                        <li>Sensitive to noise, especially at low amplitudes.</li>
+                        <li>Phase is only meaningful for oscillatory signals.</li>
+                    </ul>
+                </p>
+            """,
+
+            "Cepstral Analysis": """
+                <h3>Cepstral Analysis</h3>
+                <p>The "spectrum of the logarithm of the spectrum" - reveals periodic patterns in spectra:</p>
+                <ul>
+                    <li><b>Purpose:</b> Detect periodic structures in the spectrum, separate source and filter components.</li>
+                    <li><b>Formula:</b> Inverse Fourier transform of the logarithm of the magnitude spectrum.</li>
+                    <li><b>Key concepts:</b>
+                        <ul>
+                            <li><b>Quefrency:</b> The x-axis in cepstral domain (a form of time).</li>
+                            <li><b>Rahmonics:</b> Peaks in the cepstrum (analogous to harmonics).</li>
+                        </ul>
+                    </li>
+                </ul>
+                <p><b>Applications:</b>
+                    <ul>
+                        <li>Pitch detection in speech (fundamental frequency)</li>
+                        <li>Echo detection and removal</li>
+                        <li>Speech processing and recognition</li>
+                        <li>Mechanical fault diagnosis (detecting periodicities)</li>
+                    </ul>
+                </p>
+                <p><b>Interpretation:</b>
+                    <ul>
+                        <li>Peaks in the cepstrum represent periodic components in the original spectrum.</li>
+                        <li>First significant peak indicates fundamental period or echo delay.</li>
+                        <li>Lower quefrencies relate to spectral envelope, higher to fine structure.</li>
+                    </ul>
+                </p>
+                <p><b>Limitations:</b>
+                    <ul>
+                        <li>Interpretation can be complex without domain knowledge.</li>
+                        <li>May require pre-processing for optimal results.</li>
+                        <li>Performance degrades in noisy signals.</li>
+                        <li>Less effective for signals with rapidly changing pitch.</li>
+                    </ul>
+                </p>
+            """,
+
+            "Cross-Correlation": """
+                <h3>Cross-Correlation</h3>
+                <p>Measures similarity between two different signals as a function of time lag:</p>
+                <ul>
+                    <li><b>Purpose:</b> Determine time delay between signals, measure similarity, detect common patterns.</li>
+                    <li><b>Formula:</b> (f⋆g)(τ) = ∫f*(t)·g(t+τ)dt (or discrete equivalent)</li>
+                    <li><b>Key results:</b>
+                        <ul>
+                            <li><b>Maximum correlation value:</b> Indicates degree of similarity (0-1 when normalized).</li>
+                            <li><b>Lag at maximum:</b> Time offset that best aligns the signals.</li>
+                        </ul>
+                    </li>
+                </ul>
+                <p><b>Applications:</b>
+                    <ul>
+                        <li>Finding signal delays (e.g., acoustics, radar)</li>
+                        <li>Pattern detection across multiple sensors</li>
+                        <li>Template matching in signal processing</li>
+                        <li>Time difference of arrival (TDOA) calculations</li>
+                        <li>Measuring similarity between related signals</li>
+                    </ul>
+                </p>
+                <p><b>Interpretation:</b>
+                    <ul>
+                        <li>The peak in cross-correlation indicates the time lag that maximizes similarity.</li>
+                        <li>Higher correlation values suggest stronger relationships between signals.</li>
+                        <li>Multiple peaks may indicate repeating patterns or multiple path propagation.</li>
+                    </ul>
+                </p>
+                <p><b>Limitations:</b>
+                    <ul>
+                        <li>Assumes signals are related and have similar structures.</li>
+                        <li>May be misleading if signals have different amplitude scales (normalization helps).</li>
+                        <li>Sensitive to noise and outliers.</li>
+                        <li>May detect spurious correlations in complex signals.</li>
+                    </ul>
+                </p>
+            """,
+
+            "Wavelet Transform": """
+                <h3>Wavelet Transform</h3>
+                <p>Decomposes a signal into components at different scales/frequencies with time localization:</p>
+                <ul>
+                    <li><b>Purpose:</b> Multi-resolution analysis providing both time and frequency information.</li>
+                    <li><b>Key concepts:</b>
+                        <ul>
+                            <li><b>Approximation:</b> Low-frequency components of the signal.</li>
+                            <li><b>Details:</b> High-frequency components at different scales.</li>
+                            <li><b>Decomposition Level:</b> Number of scales analyzed (more levels = finer frequency division).</li>
+                        </ul>
+                    </li>
+                </ul>
+                <p><b>Advantages over Fourier Transform:</b>
+                    <ul>
+                        <li>Provides both time and frequency information simultaneously.</li>
+                        <li>Better suited for non-stationary signals with changing frequency content.</li>
+                        <li>Adaptive resolution (fine time resolution at high frequencies, fine frequency resolution at low frequencies).</li>
+                        <li>More effective at capturing transient events.</li>
+                    </ul>
+                </p>
+                <p><b>Applications:</b>
+                    <ul>
+                        <li>Identifying transient events at different time scales</li>
+                        <li>Denoising signals while preserving important features</li>
+                        <li>Feature extraction for classification tasks</li>
+                        <li>Image and audio compression</li>
+                        <li>Biomedical signal processing (EEG, ECG analysis)</li>
+                    </ul>
+                </p>
+                <p><b>Limitations:</b>
+                    <ul>
+                        <li>More complex to interpret than traditional spectral analysis.</li>
+                        <li>Choice of wavelet family affects results.</li>
+                        <li>Edge effects at signal boundaries.</li>
+                        <li>Computational intensity increases with decomposition levels.</li>
+                    </ul>
+                </p>
+            """,
+
+            "Wavelet Types": """
+                <h3>Wavelet Types</h3>
+                <p>Different wavelet families have unique characteristics suited to specific signal types:</p>
+                <ul>
+                    <li><b>Haar:</b>
+                        <ul>
+                            <li>The simplest wavelet, resembling a step function.</li>
+                            <li>Good for detecting abrupt transitions and edges.</li>
+                            <li>Limited smoothness, resulting in blocky approximations.</li>
+                            <li>Best for: Signals with sudden jumps or digital/binary signals.</li>
+                        </ul>
+                    </li>
+                    <li><b>Daubechies (db4, db8):</b>
+                        <ul>
+                            <li>Compactly supported wavelets with maximum number of vanishing moments.</li>
+                            <li>Good balance between smoothness and localization.</li>
+                            <li>Higher order (db8) provides smoother representation than lower order (db4).</li>
+                            <li>Best for: General-purpose analysis, signals with polynomial trends.</li>
+                        </ul>
+                    </li>
+                    <li><b>Symlets (sym4, sym8):</b>
+                        <ul>
+                            <li>Modified version of Daubechies wavelets with increased symmetry.</li>
+                            <li>Nearly symmetrical, reducing phase distortion.</li>
+                            <li>Good time-frequency localization properties.</li>
+                            <li>Best for: Applications where phase information is important.</li>
+                        </ul>
+                    </li>
+                    <li><b>Coiflets (coif1, coif3):</b>
+                        <ul>
+                            <li>More symmetrical than Daubechies wavelets.</li>
+                            <li>Have vanishing moments for both wavelet and scaling functions.</li>
+                            <li>Good for preserving signal features during analysis/reconstruction.</li>
+                            <li>Best for: Function approximation, signals requiring accurate reconstruction.</li>
+                        </ul>
+                    </li>
+                </ul>
+                <p><b>Selection criteria:</b>
+                    <ul>
+                        <li>Signal characteristics (smooth vs. abrupt changes)</li>
+                        <li>Analysis goals (detection, denoising, compression)</li>
+                        <li>Required frequency resolution</li>
+                        <li>Computational constraints</li>
+                    </ul>
+                </p>
+            """,
+
+            "Wavelet Applications": """
+                <h3>Wavelet Applications</h3>
+                <p>Common applications of wavelet analysis in signal processing:</p>
+                <ul>
+                    <li><b>Signal Denoising:</b>
+                        <ul>
+                            <li>Wavelets can separate signal from noise at different scales.</li>
+                            <li>Thresholding detail coefficients removes noise while preserving signal features.</li>
+                            <li>More effective than traditional filtering for preserving edges and transients.</li>
+                        </ul>
+                    </li>
+                    <li><b>Feature Detection:</b>
+                        <ul>
+                            <li>Identify specific patterns or events at appropriate scales.</li>
+                            <li>Useful for detecting discontinuities, spikes, or other transient events.</li>
+                            <li>Can locate features that are difficult to detect in time or frequency domain alone.</li>
+                        </ul>
+                    </li>
+                    <li><b>Compression:</b>
+                        <ul>
+                            <li>Many signals can be represented with few wavelet coefficients.</li>
+                            <li>Discarding small coefficients enables efficient storage while preserving essential information.</li>
+                            <li>Basis for JPEG2000 image compression standard.</li>
+                        </ul>
+                    </li>
+                    <li><b>Component Separation:</b>
+                        <ul>
+                            <li>Isolate different physical processes operating at different scales.</li>
+                            <li>Extract specific signal components by focusing on relevant decomposition levels.</li>
+                            <li>Separate fast vs. slow processes in complex signals.</li>
+                        </ul>
+                    </li>
+                    <li><b>Non-Stationary Signal Analysis:</b>
+                        <ul>
+                            <li>Track how frequency content changes over time.</li>
+                            <li>Identify time-varying behavior that Fourier analysis would miss.</li>
+                            <li>Particularly valuable for biological signals, seismic data, or financial time series.</li>
+                        </ul>
+                    </li>
+                </ul>
+                <p><b>Implementation approach:</b>
+                    <ul>
+                        <li>First select appropriate wavelet family for your signal.</li>
+                        <li>Choose decomposition level based on frequency resolution needs.</li>
+                        <li>Examine both approximation (general trend) and details (specific scales).</li>
+                        <li>Consider energy distribution across levels to identify important components.</li>
+                    </ul>
+                </p>
+            """
+        }
+
+        # Show the help content for the selected topic or a message if topic not found
+        if topic in help_content:
+            self.help_text.setHtml(help_content[topic])
+        else:
+            self.help_text.setHtml(f"<h3>No help available for '{topic}'</h3><p>Please select another topic.</p>")
