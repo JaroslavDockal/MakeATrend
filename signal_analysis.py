@@ -21,10 +21,10 @@ import scipy.stats as stats
 from scipy.signal import hilbert, butter, filtfilt, correlate
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QPushButton, QTableWidget,
-                             QTableWidgetItem, QHeaderView, QComboBox, QLabel,
-                             QWidget, QHBoxLayout, QGroupBox, QScrollArea, QTabWidget,
-                             QFormLayout, QDoubleSpinBox, QRadioButton, QButtonGroup,
-                               QMainWindow, QApplication, QSpinBox, QTextEdit,
+                               QTableWidgetItem, QHeaderView, QComboBox, QLabel,
+                               QWidget, QHBoxLayout, QGroupBox, QScrollArea, QTabWidget,
+                               QFormLayout, QDoubleSpinBox, QRadioButton, QButtonGroup,
+                               QMainWindow, QApplication, QSpinBox, QTextEdit, QSplitter,
                                QGridLayout, QVBoxLayout, QGridLayout, QScrollArea)
 
 
@@ -398,6 +398,7 @@ class SignalAnalysisDialog(QDialog):
         super().__init__(parent)
         self.parent = parent
         self.setWindowTitle("Signal Analysis")
+        self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint)
         self.resize(800, 600)
 
         # Store plot windows to prevent garbage collection
@@ -412,9 +413,20 @@ class SignalAnalysisDialog(QDialog):
         """
         layout = QVBoxLayout(self)
 
+        # Add a QSplitter to allow resizing between top and bottom areas
+        self.splitter = QSplitter(Qt.Orientation.Vertical)
+        layout.addWidget(self.splitter)
+
+        # Create top widget for tabs
+        top_widget = QWidget()
+        top_layout = QVBoxLayout(top_widget)
+
         # Create tabs for better organization
         self.tab_widget = QTabWidget()
-        layout.addWidget(self.tab_widget)
+        top_layout.addWidget(self.tab_widget)
+
+        # Add the top widget to the splitter
+        self.splitter.addWidget(top_widget)
 
         # ===== Basic Analysis Tab =====
         basic_tab = QWidget()
@@ -525,8 +537,13 @@ class SignalAnalysisDialog(QDialog):
 
         cross_layout.addLayout(cross_button_layout)
 
+        # Add the Explanations tab
         explanation_tab = ExplanationTab(self)
         self.tab_widget.addTab(explanation_tab, "Explanations")
+
+        # Create results area and add to splitter
+        results_widget = QWidget()
+        self.results_layout = QVBoxLayout(results_widget)
 
         # Results area (initially empty) - shared across tabs
         results_scroll = QScrollArea()
@@ -534,7 +551,15 @@ class SignalAnalysisDialog(QDialog):
         self.results_widget = QWidget()
         self.results_layout = QVBoxLayout(self.results_widget)
         results_scroll.setWidget(self.results_widget)
-        layout.addWidget(results_scroll)
+
+        results_container = QWidget()
+        results_container_layout = QVBoxLayout(results_container)
+        results_container_layout.addWidget(results_scroll)
+
+        self.splitter.addWidget(results_container)
+
+        # Set initial sizes of the splitter areas (e.g., 60% top, 40% bottom)
+        self.splitter.setSizes([600, 400])
 
         # Close button
         close_btn = QPushButton("Close")
@@ -1410,6 +1435,29 @@ class SignalAnalysisDialog(QDialog):
         group.setLayout(layout)
         self.results_layout.addWidget(group)
 
+    def show_help_in_results(self, topic, content):
+        """
+        Display help content in the results area.
+
+        Args:
+            topic: The help topic title
+            content: HTML formatted help content
+        """
+        self.clear_results()
+
+        # Create group box for help content
+        group = QGroupBox(f"Help: {topic}")
+        group_layout = QVBoxLayout()
+
+        # Create text display for help
+        help_text = QTextEdit()
+        help_text.setReadOnly(True)
+        help_text.setHtml(content)
+
+        group_layout.addWidget(help_text)
+        group.setLayout(group_layout)
+        self.results_layout.addWidget(group)
+
 
 def show_analysis_dialog(parent):
     """
@@ -1426,6 +1474,7 @@ def show_analysis_dialog(parent):
 class ExplanationTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.parent_dialog = parent  # Store reference to parent dialog
         self.setup_ui()
 
     def setup_ui(self):
@@ -1443,15 +1492,6 @@ class ExplanationTab(QWidget):
 
         scroll_area.setWidget(scroll_content)
         main_layout.addWidget(scroll_area)
-
-        # Help text display area
-        self.help_text = QTextEdit()
-        self.help_text.setReadOnly(True)
-        self.help_text.setMinimumHeight(200)
-        main_layout.addWidget(self.help_text)
-
-        # Show default help text
-        self.show_default_help()
 
     def create_button_groups(self, parent_layout):
         # Basic Analysis group
@@ -1511,9 +1551,11 @@ class ExplanationTab(QWidget):
 
     def add_buttons_to_grid(self, layout, button_texts, cols=3):
         for i, text in enumerate(button_texts):
+            row = i // cols
+            col = i % cols
             button = QPushButton(text)
+            # Connect to new method that shows help in results area
             button.clicked.connect(lambda checked, t=text: self.show_help(t))
-            row, col = divmod(i, cols)
             layout.addWidget(button, row, col)
 
     def show_default_help(self):
@@ -2082,8 +2124,8 @@ class ExplanationTab(QWidget):
             """
         }
 
-        # Show the help content for the selected topic or a message if topic not found
-        if topic in help_content:
-            self.help_text.setHtml(help_content[topic])
-        else:
-            self.help_text.setHtml(f"<h3>No help available for '{topic}'</h3><p>Please select another topic.</p>")
+        if self.parent_dialog:
+            if topic in help_content:
+                self.parent_dialog.show_help_in_results(topic, help_content[topic])
+            else:
+                self.parent_dialog.show_help_in_results(topic, f"<h3>No help available for '{topic}'</h3><p>Please select another topic.</p>")
