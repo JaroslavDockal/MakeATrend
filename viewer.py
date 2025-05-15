@@ -1,22 +1,21 @@
 """
 Main GUI implementation of the CSV Signal Viewer with custom color support.
 """
+import os
 
 import pyqtgraph as pg
 import numpy as np
-import re
 import datetime
-import os
 from pyqtgraph import setConfigOption
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QCheckBox, QScrollArea, QSplitter, QStatusBar,
-    QComboBox, QColorDialog, QSpinBox, QLineEdit, QDialog,
+    QComboBox, QColorDialog, QSpinBox, QLineEdit,
     QFileDialog, QGraphicsProxyWidget, QMessageBox
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QIcon
 from pyqtgraph import DateAxisItem
 
 from utils import find_nearest_index, is_digital_signal
@@ -46,8 +45,15 @@ class SignalViewer(QMainWindow):
 
     def __init__(self):
         super().__init__()
+
+        icon_path = os.path.join(os.path.dirname(__file__), "assets", "line-graph.ico")
+        self.setWindowIcon(QIcon(icon_path))
+
         self.setWindowTitle("CSV Signal Viewer")
         self.resize(1400, 800)
+
+        # Enable drag-and-drop
+        self.setAcceptDrops(True)
 
         self.data_signals = {}
         self.curves = {}
@@ -101,6 +107,7 @@ class SignalViewer(QMainWindow):
         self.show_panel_btn.setFixedSize(30, 30)
         self.show_panel_btn.setStyleSheet("background-color: gray; color: white; font-weight: bold; border: none;")
         self.show_panel_btn.clicked.connect(lambda: self.toggle_panel_btn.setChecked(True))
+        self.show_panel_btn.setToolTip("Show control panel")
 
         self.proxy_btn = QGraphicsProxyWidget()
         self.proxy_btn.setWidget(self.show_panel_btn)
@@ -165,29 +172,35 @@ class SignalViewer(QMainWindow):
 
         load_btn = QPushButton("Load Files")
         load_btn.clicked.connect(lambda: self.load_data(multiple=True))
+        load_btn.setToolTip("Open file dialog to select and load one or more files")
         left_column.addWidget(load_btn)
 
         self.toggle_mode_btn = QPushButton("Advanced Mode")
         self.toggle_mode_btn.setCheckable(True)
         self.toggle_mode_btn.toggled.connect(self.toggle_complex_mode)
+        self.toggle_mode_btn.setToolTip("Show additional signal controls (color, width, axis selection)")
         left_column.addWidget(self.toggle_mode_btn)
 
         self.toggle_panel_btn = QPushButton("Hide Panel")
         self.toggle_panel_btn.setCheckable(True)
         self.toggle_panel_btn.setChecked(True)
         self.toggle_panel_btn.toggled.connect(self.toggle_right_panel)
+        self.toggle_panel_btn.setToolTip("Hide the control panel")
         left_column.addWidget(self.toggle_panel_btn)
 
         export_btn = QPushButton("Export Graph")
         export_btn.clicked.connect(self.export_graph)
+        export_btn.setToolTip("Save current graph as image (PNG) or PDF file")
         right_column.addWidget(export_btn)
 
         analysis_btn = QPushButton("Signal Analysis")
         analysis_btn.clicked.connect(self.open_analysis_dialog)
+        analysis_btn.setToolTip("Open signal analysis tools (FFT, statistics, etc.)")
         right_column.addWidget(analysis_btn)
 
         virtual_btn = QPushButton("Add Virtual Signal")
         virtual_btn.clicked.connect(self.add_virtual_signal)
+        virtual_btn.setToolTip("Create calculated signals using expressions with existing signals")
         right_column.addWidget(virtual_btn)
 
         button_layout.addLayout(left_column)
@@ -230,37 +243,45 @@ class SignalViewer(QMainWindow):
         self.toggle_grid_chk = QCheckBox("Show Grid")
         self.toggle_grid_chk.setChecked(True)
         self.toggle_grid_chk.toggled.connect(self.toggle_grid)
+        self.toggle_grid_chk.setToolTip("Show/hide grid lines on graph")
         col1.addWidget(self.toggle_grid_chk)
 
         self.cursor_a_chk = QCheckBox("Show Cursor A")
         self.cursor_a_chk.toggled.connect(lambda s: self.toggle_cursor(self.cursor_a, s))
+        self.cursor_a_chk.setToolTip("Show/hide magenta vertical cursor line")
         col1.addWidget(self.cursor_a_chk)
 
         self.dock_cursor_info_chk = QCheckBox("Dock Cursor Info")
         self.dock_cursor_info_chk.toggled.connect(self.toggle_cursor_info_mode)
+        self.dock_cursor_info_chk.setToolTip("Show cursor measurements directly in control panel")
         col1.addWidget(self.dock_cursor_info_chk)
 
         self.downsample_chk = QCheckBox("Downsample")
         self.downsample_chk.setChecked(False)
+        self.downsample_chk.setToolTip("Reduce data points for better performance with large datasets")
         col1.addWidget(self.downsample_chk)
 
         self.toggle_crosshair_chk = QCheckBox("Show Crosshair")
         self.toggle_crosshair_chk.toggled.connect(self.toggle_crosshair)
+        self.toggle_crosshair_chk.setToolTip("Show/hide cursor crosshair following mouse")
         col2.addWidget(self.toggle_crosshair_chk)
 
         self.cursor_b_chk = QCheckBox("Show Cursor B")
         self.cursor_b_chk.toggled.connect(lambda s: self.toggle_cursor(self.cursor_b, s))
+        self.cursor_b_chk.setToolTip("Show/hide cyan vertical cursor line")
         col2.addWidget(self.cursor_b_chk)
 
         #TODO Přidat funkci pro log - Tohle je zatím jen placeholder
         self.show_log_chk = QCheckBox("Show Log")
         self.show_log_chk.toggled.connect(self.toggle_cursor_info_mode)
+        self.show_log_chk.setToolTip("Show application log messages")
         col2.addWidget(self.show_log_chk)
 
         self.downsample_points = QSpinBox()
         self.downsample_points.setRange(100, 50000)
         self.downsample_points.setValue(5000)
         self.downsample_points.setEnabled(True)
+        self.downsample_points.setToolTip("Maximum number of points to display per signal")
         col2.addWidget(self.downsample_points)
 
         checkbox_layout.addLayout(col1)
@@ -271,6 +292,7 @@ class SignalViewer(QMainWindow):
         self.filter_box = QLineEdit()
         self.filter_box.setPlaceholderText("Filter signals...")
         self.filter_box.textChanged.connect(self.apply_signal_filter)
+        self.filter_box.setToolTip("Type to filter signal list by name")
         layout.addWidget(self.filter_box)
 
         layout.addWidget(QLabel("Signals:"))
@@ -406,7 +428,8 @@ class SignalViewer(QMainWindow):
             html_text = ", ".join(html_parts) if html_parts else axis
             label.setLabel(text=html_text)
 
-    def pick_color(self, btn):
+    @staticmethod
+    def pick_color(btn):
         """
         Opens color dialog to select line color.
 
@@ -625,3 +648,35 @@ class SignalViewer(QMainWindow):
 
     def open_analysis_dialog(self):
         show_analysis_dialog(self)
+
+    def dragEnterEvent(self, event):
+        """
+        Accept drag events if they contain files.
+        """
+        if event.mimeData().hasUrls():
+            event.accept()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        """
+        Handle file drop events and load the dropped files.
+        """
+        files = [url.toLocalFile() for url in event.mimeData().urls()]
+        if files:
+            self.load_dropped_files(files)
+
+    def load_dropped_files(self, files):
+        """
+        Load the dropped files into the application.
+        """
+        signals = load_multiple_files(files)
+        if not signals:
+            return
+
+        self.data_signals = signals
+        self.clear_signals()
+
+        for name in signals:
+            row = self.build_signal_row(name)
+            self.scroll_layout.addWidget(row)

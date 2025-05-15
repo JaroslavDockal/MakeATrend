@@ -22,7 +22,7 @@ def load_single_file():
 
     return {name: (time_arr, values) for name, values in signals.items()}
 
-def load_multiple_files():
+def load_multiple_files(file_paths=None):
     """
     Opens a dialog to select multiple files, merges signals with same names.
     Inserts NaNs between time segments to prevent false interpolation.
@@ -30,13 +30,14 @@ def load_multiple_files():
     Returns:
         dict[str, tuple[np.ndarray, np.ndarray]]: signal name -> (time, values)
     """
-    paths, _ = QFileDialog.getOpenFileNames(None, "Open Data Files", "", "Data Files (*.csv *.txt)")
-    if not paths:
-        return {}
+    if file_paths is None:
+        file_paths, _ = QFileDialog.getOpenFileNames(None, "Open Data Files", "", "Data Files (*.csv *.txt)")
+        if not file_paths:
+            return {}
 
     all_signals = {}
 
-    for path in paths:
+    for path in file_paths:
         try:
             time_arr, signals = parse_csv_or_recorder(path)
         except Exception as e:
@@ -57,26 +58,6 @@ def load_multiple_files():
                     all_signals[name].append((time_arr, values))
 
     result = {}
-
-    for name, chunks in all_signals.items():
-        times_with_nans = []
-        values_with_nans = []
-
-        for i, (t, v) in enumerate(chunks):
-            times_with_nans.append(t)
-            values_with_nans.append(v)
-
-            # Add NaN gap unless it's the last chunk
-            if i < len(chunks) - 1:
-                gap_time = t[-1] + 1e-6  # tiny gap forward
-                times_with_nans.append(np.array([gap_time]))
-                values_with_nans.append(np.array([np.nan]))
-
-        times = np.concatenate(times_with_nans)
-        values = np.concatenate(values_with_nans)
-        idx = np.argsort(times)
-
-        result[name] = (times[idx], values[idx])
 
     return result
 

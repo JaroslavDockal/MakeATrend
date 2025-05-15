@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QDialogButtonBox, QComboBox, QMessageBox, QPushButton
 )
-from PySide6.QtCore import Qt
 import re
 import ast
 import numpy as np
@@ -287,7 +286,7 @@ class VirtualSignalDialog(QDialog):
         self.expr_edit.textChanged.connect(self._update_alias_inputs)
 
         # Buttons
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         self.button_box.accepted.connect(self.validate_and_accept)
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)

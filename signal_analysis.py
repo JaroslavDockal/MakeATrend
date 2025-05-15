@@ -83,7 +83,7 @@ class SignalAnalysisTools:
         freqs = np.fft.rfftfreq(n, 1 / fs)
         magnitudes = np.abs(fft_values) / n * 2  # Scale appropriately
 
-        return (time_arr, values, freqs, magnitudes)
+        return time_arr, values, freqs, magnitudes
 
     @staticmethod
     def analyze_signal(parent, signal_name):
@@ -396,7 +396,7 @@ class SignalAnalysisDialog(QDialog):
         super().__init__(parent)
         self.parent = parent
         self.setWindowTitle("Signal Analysis")
-        self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint)
+        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowMaximizeButtonHint)
         self.resize(800, 600)
 
         # Store plot windows to prevent garbage collection

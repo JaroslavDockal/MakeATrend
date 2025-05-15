@@ -29,8 +29,8 @@ class Crosshair:
         self.enabled = False
 
         # Dashed cross lines
-        self.vline = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen((200, 200, 200), style=Qt.DashLine))
-        self.hline = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen((200, 200, 200), style=Qt.DashLine))
+        self.vline = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen((200, 200, 200), style=Qt.PenStyle.DashLine))
+        self.hline = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen((200, 200, 200), style=Qt.PenStyle.DashLine))
         self.viewbox.addItem(self.vline, ignoreBounds=True)
         self.viewbox.addItem(self.hline, ignoreBounds=True)
 
@@ -43,11 +43,13 @@ class Crosshair:
         self.viewbox.addItem(self.label_y_right)
 
         # Signal proxy for mouse movement
-        self.proxy = pg.SignalProxy(
-            self.viewbox.scene().sigMouseMoved,
-            rateLimit=60,
-            slot=self.mouse_moved
-        )
+        scene = self.viewbox.scene()
+        if isinstance(scene, pg.GraphicsScene):
+            self.proxy = pg.SignalProxy(
+                scene.sigMouseMoved,
+                rateLimit=60,
+                slot=self.mouse_moved
+            )
 
         self.mouse_locked = False
         self.local_tz = datetime.now().astimezone().tzinfo

@@ -14,13 +14,12 @@ import os
 import re
 import pandas as pd
 import numpy as np
-import warnings
 import json
 from datetime import datetime, timedelta
 
 from PySide6.QtWidgets import QMessageBox, QFileDialog
-from PySide6.QtCore import QBuffer, QIODevice, QSize, QRect
-from PySide6.QtGui import QPixmap, QPainter, QImage
+from PySide6.QtCore import QSize, QRect
+from PySide6.QtGui import QPixmap, QPainter
 
 
 # ===== CSV AND DATA PARSING FUNCTIONS =====
@@ -339,6 +338,7 @@ def export_graph(plot_widget, parent_widget=None):
                 finally:
                     painter.end()  # Make sure painter is always ended
             except ImportError:
+                generator = None
                 QMessageBox.critical(
                     parent_widget,
                     "Export Error",

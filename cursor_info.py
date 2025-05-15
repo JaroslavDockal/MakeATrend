@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 import datetime
-import numpy as np
 import csv
 import re
 
@@ -27,7 +26,7 @@ class CursorInfoDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Cursor Information")
-        self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
+        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
         self.resize(700, 400)
         self.layout = QVBoxLayout(self)
 
@@ -71,7 +70,8 @@ class CursorInfoDialog(QDialog):
             self.toggle_format_btn.setText("Switch to Scientific Notation")
         self._rebuild_table()
 
-    def extract_unit(self, signal_name: str) -> str:
+    @staticmethod
+    def extract_unit(signal_name: str) -> str:
         """
         Extracts unit from a signal name using brackets (e.g., "Temp [°C]").
         Returns an empty string if unit is '-' or missing.
@@ -88,7 +88,8 @@ class CursorInfoDialog(QDialog):
             return "" if unit == "-" else unit
         return ""
 
-    def clean_signal_name(self, signal_name: str) -> str:
+    @staticmethod
+    def clean_signal_name(signal_name: str) -> str:
         """
         Removes unit part from signal name for clean display.
 
@@ -161,7 +162,8 @@ class CursorInfoDialog(QDialog):
 
         self._rebuild_table()
 
-    def _is_boolean(self, a_val, b_val) -> bool:
+    @staticmethod
+    def _is_boolean(a_val, b_val) -> bool:
         """
         Detects if both values are textual booleans ('TRUE'/'FALSE').
 
@@ -246,7 +248,8 @@ class CursorInfoDialog(QDialog):
                         "-" if row["bool"] else row["dps"]
                     ])
 
-    def calc_time_delta(self, t1_str: str, t2_str: str) -> str:
+    @staticmethod
+    def calc_time_delta(t1_str: str, t2_str: str) -> str:
         """
         Calculates the absolute time difference between two timestamps.
 
@@ -273,7 +276,8 @@ class CursorInfoDialog(QDialog):
         self.move(self.pos())
         super().showEvent(event)
 
-    def _calc_delta_seconds(self, t1_str, t2_str) -> float:
+    @staticmethod
+    def _calc_delta_seconds(t1_str, t2_str) -> float:
         try:
             fmt = "%H:%M:%S.%f"
             t1 = datetime.datetime.strptime(t1_str, fmt)
