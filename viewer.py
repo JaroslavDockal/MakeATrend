@@ -7,6 +7,7 @@ import numpy as np
 import re
 import datetime
 import os
+from pyqtgraph import setConfigOption
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
@@ -60,6 +61,9 @@ class SignalViewer(QMainWindow):
         self.color_counter = 0
 
         self.init_ui()
+
+        setConfigOption('useOpenGL', True)
+        setConfigOption('enableExperimental', True)
 
     def init_ui(self):
         """
@@ -168,7 +172,7 @@ class SignalViewer(QMainWindow):
         self.toggle_mode_btn.toggled.connect(self.toggle_complex_mode)
         left_column.addWidget(self.toggle_mode_btn)
 
-        self.toggle_panel_btn = QPushButton("Toggle Panel")
+        self.toggle_panel_btn = QPushButton("Hide Panel")
         self.toggle_panel_btn.setCheckable(True)
         self.toggle_panel_btn.setChecked(True)
         self.toggle_panel_btn.toggled.connect(self.toggle_right_panel)
@@ -232,6 +236,14 @@ class SignalViewer(QMainWindow):
         self.cursor_a_chk.toggled.connect(lambda s: self.toggle_cursor(self.cursor_a, s))
         col1.addWidget(self.cursor_a_chk)
 
+        self.dock_cursor_info_chk = QCheckBox("Dock Cursor Info")
+        self.dock_cursor_info_chk.toggled.connect(self.toggle_cursor_info_mode)
+        col1.addWidget(self.dock_cursor_info_chk)
+
+        self.downsample_chk = QCheckBox("Downsample")
+        self.downsample_chk.setChecked(False)
+        col1.addWidget(self.downsample_chk)
+
         self.toggle_crosshair_chk = QCheckBox("Show Crosshair")
         self.toggle_crosshair_chk.toggled.connect(self.toggle_crosshair)
         col2.addWidget(self.toggle_crosshair_chk)
@@ -240,14 +252,16 @@ class SignalViewer(QMainWindow):
         self.cursor_b_chk.toggled.connect(lambda s: self.toggle_cursor(self.cursor_b, s))
         col2.addWidget(self.cursor_b_chk)
 
-        self.dock_cursor_info_chk = QCheckBox("Dock Cursor Info")
-        self.dock_cursor_info_chk.toggled.connect(self.toggle_cursor_info_mode)
-        col1.addWidget(self.dock_cursor_info_chk)
-
         #TODO Přidat funkci pro log - Tohle je zatím jen placeholder
         self.show_log_chk = QCheckBox("Show Log")
         self.show_log_chk.toggled.connect(self.toggle_cursor_info_mode)
         col2.addWidget(self.show_log_chk)
+
+        self.downsample_points = QSpinBox()
+        self.downsample_points.setRange(100, 50000)
+        self.downsample_points.setValue(5000)
+        self.downsample_points.setEnabled(True)
+        col2.addWidget(self.downsample_points)
 
         checkbox_layout.addLayout(col1)
         checkbox_layout.addLayout(col2)
@@ -356,6 +370,13 @@ class SignalViewer(QMainWindow):
 
                     pen = pg.mkPen(color=color, **style)
                     time_arr, value_arr = self.data_signals[name]
+
+                    # Downsample data before plotting
+                    # Only downsample if checkbox is checked
+                    if hasattr(self, 'downsample_chk') and self.downsample_chk.isChecked():
+                        max_points = self.downsample_points.value()
+                        time_arr, value_arr = self.downsample_signal(time_arr, value_arr, max_points)
+
                     curve = pg.PlotCurveItem(x=time_arr, y=value_arr, pen=pen)
                     self.viewboxes[axis].addItem(curve)
                     self.curves[name] = curve
