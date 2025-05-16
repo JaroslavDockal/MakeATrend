@@ -62,7 +62,28 @@ class SignalColors:
         Returns:
             str: Hexadecimal color code (e.g., '#ff0000').
         """
-        return cls.COLORS[index % len(cls.COLORS)]
+        SignalViewer.log_message_static(f"Requesting color at index {index}", DEBUG)
+
+        if not isinstance(index, int):
+            SignalViewer.log_message_static(f"Non-integer index {index} provided to get_color, attempting conversion", WARNING)
+            try:
+                index = int(index)
+            except (ValueError, TypeError) as e:
+                SignalViewer.log_message_static(f"Could not convert index to integer: {str(e)}", ERROR)
+                index = 0
+
+        if index < 0:
+            SignalViewer.log_message_static(f"Negative index {index} provided, using modulo to normalize", WARNING)
+
+        color_count = len(cls.COLORS)
+        normalized_index = index % color_count
+
+        if index >= color_count:
+            SignalViewer.log_message_static(f"Color index {index} exceeds available colors ({color_count}), wrapping to index {normalized_index}", DEBUG)
+
+        color = cls.COLORS[normalized_index]
+        SignalViewer.log_message_static(f"Returning color {color} for index {index}", DEBUG)
+        return color
 
     @classmethod
     def get_color_for_name(cls, name: str) -> str:
@@ -78,11 +99,30 @@ class SignalColors:
         Returns:
             str: Hexadecimal color code (e.g., '#ff0000').
         """
-        # Using SHA256 to generate a more unique and consistent hash
-        hash_value = hashlib.sha256(name.encode()).hexdigest()
-        # Using the first 8 characters of the hash to create a color index
-        index = int(hash_value[-8:], 16) % len(cls.COLORS)  # Use last 8 characters for index
-        return cls.COLORS[index]
+        SignalViewer.log_message_static(f"Generating consistent color for signal '{name}'", DEBUG)
+
+        if not name:
+            SignalViewer.log_message_static("Empty signal name provided, using fallback color", WARNING)
+            return cls.COLORS[0]
+
+        try:
+            # Using SHA256 to generate a more unique and consistent hash
+            SignalViewer.log_message_static(f"Computing SHA256 hash for signal name '{name}'", DEBUG)
+            hash_value = hashlib.sha256(name.encode()).hexdigest()
+
+            # Using the first 8 characters of the hash to create a color index
+            SignalViewer.log_message_static(f"Using last 8 characters of hash for index calculation", DEBUG)
+            hash_subset = hash_value[-8:]
+            index = int(hash_subset, 16) % len(cls.COLORS)
+
+            color = cls.COLORS[index]
+            SignalViewer.log_message_static(f"Signal '{name}' mapped to color {color} (hash: ...{hash_subset}, index: {index})", DEBUG)
+            return color
+
+        except Exception as e:
+            SignalViewer.log_message_static(f"Error generating color for signal '{name}': {str(e)}", ERROR)
+            # Fallback to a default color in case of error
+            return cls.COLORS[0]
 
     @classmethod
     def random_color(cls) -> str:
@@ -92,6 +132,30 @@ class SignalColors:
         Returns:
             str: Random Hexadecimal color code (e.g., '#ff0000').
         """
-        random_color = "#{:02x}{:02x}{:02x}".format(random.randint(0, 255), random.randint(0, 255),
-                                                    random.randint(0, 255))
-        return random_color
+        SignalViewer.log_message_static("Generating random color", DEBUG)
+
+        try:
+            r = random.randint(0, 255)
+            g = random.randint(0, 255)
+            b = random.randint(0, 255)
+
+            SignalViewer.log_message_static(f"Generated random RGB values: R={r}, G={g}, B={b}", DEBUG)
+
+            # Check if the color is too dark for visibility on dark backgrounds
+            brightness = (r * 299 + g * 587 + b * 114) / 1000
+            if brightness < 50:
+                SignalViewer.log_message_static(f"Random color too dark (brightness={brightness}), increasing luminance", WARNING)
+                # Make it brighter by increasing all components
+                r = min(255, r + 100)
+                g = min(255, g + 100)
+                b = min(255, b + 100)
+                SignalViewer.log_message_static(f"Adjusted RGB values: R={r}, G={g}, B={b}", DEBUG)
+
+            random_color = "#{:02x}{:02x}{:02x}".format(r, g, b)
+            SignalViewer.log_message_static(f"Generated random color: {random_color}", INFO)
+            return random_color
+
+        except Exception as e:
+            SignalViewer.log_message_static(f"Error generating random color: {str(e)}", ERROR)
+            # Fallback to a bright color that should be visible
+            return "#FF0000"  # Bright red as fallback

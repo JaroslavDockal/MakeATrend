@@ -47,22 +47,32 @@ def validate_expression(expression: str, available_aliases: list) -> tuple[bool,
             First value is True if the expression is valid, otherwise False.
             Second value contains an error message in case of invalidity, otherwise an empty string.
     """
+    SignalViewer.log_message_static(f"Validating expression: '{expression}' with available aliases: {available_aliases}", DEBUG)
+
     # Check if the expression is empty
     if not expression.strip():
+        SignalViewer.log_message_static("Expression validation failed: Expression is empty", WARNING)
         return False, "Expression is empty"
 
     # Check if the expression contains any aliases
     python_keywords = {'and', 'or', 'if', 'else', 'True', 'False', 'None'}
     found_aliases = [a for a in re.findall(r"\b[A-Za-z_]\w*\b", expression)
                      if a not in python_keywords]
+
+    SignalViewer.log_message_static(f"Found aliases in expression: {found_aliases}", DEBUG)
+
     if not found_aliases:
+        SignalViewer.log_message_static("Expression validation failed: No signal aliases found in expression", WARNING)
         return False, "Expression does not contain any signal aliases"
 
     # Check Python syntax
     try:
+        SignalViewer.log_message_static("Parsing expression with AST to check syntax", DEBUG)
         tree = ast.parse(expression, mode='eval')
     except SyntaxError as e:
-        return False, f"Syntax error: {str(e)}"
+        error_msg = f"Syntax error: {str(e)}"
+        SignalViewer.log_message_static(f"Expression validation failed: {error_msg}", WARNING)
+        return False, error_msg
 
     class SafetyVisitor(ast.NodeVisitor):
         """
@@ -77,33 +87,49 @@ def validate_expression(expression: str, available_aliases: list) -> tuple[bool,
             self.python_keywords = {'and', 'or', 'if', 'else', 'True', 'False', 'None'}
 
         def visit_Call(self, node):
-            self.errors.append(f"Function calls are not allowed: {ast.unparse(node)}")
+            error_msg = f"Function calls are not allowed: {ast.unparse(node)}"
+            SignalViewer.log_message_static(f"SafetyVisitor found disallowed call: {error_msg}", WARNING)
+            self.errors.append(error_msg)
             self.generic_visit(node)
 
         def visit_Name(self, node):
             if node.id not in self.available_aliases and node.id not in self.python_keywords:
-                self.errors.append(f"Unknown alias: {node.id}")
+                error_msg = f"Unknown alias: {node.id}"
+                SignalViewer.log_message_static(f"SafetyVisitor found unknown alias: {error_msg}", WARNING)
+                self.errors.append(error_msg)
             self.generic_visit(node)
 
         def visit_Import(self, node):
-            self.errors.append("Import statements are not allowed")
+            error_msg = "Import statements are not allowed"
+            SignalViewer.log_message_static(f"SafetyVisitor found disallowed import", WARNING)
+            self.errors.append(error_msg)
 
         def visit_ImportFrom(self, node):
-            self.errors.append("Import statements are not allowed")
+            error_msg = "Import statements are not allowed"
+            SignalViewer.log_message_static(f"SafetyVisitor found disallowed import", WARNING)
+            self.errors.append(error_msg)
 
         def visit_Attribute(self, node):
-            self.errors.append(f"Attribute access is not allowed: {ast.unparse(node)}")
+            error_msg = f"Attribute access is not allowed: {ast.unparse(node)}"
+            SignalViewer.log_message_static(f"SafetyVisitor found disallowed attribute access: {error_msg}", WARNING)
+            self.errors.append(error_msg)
 
         def visit_Lambda(self, node):
-            self.errors.append("Lambda functions are not allowed")
+            error_msg = "Lambda functions are not allowed"
+            SignalViewer.log_message_static(f"SafetyVisitor found disallowed lambda", WARNING)
+            self.errors.append(error_msg)
 
     # Check for dangerous constructs
+    SignalViewer.log_message_static("Running safety checks on expression AST", DEBUG)
     safety_checker = SafetyVisitor(available_aliases)
     safety_checker.visit(tree)
 
     if safety_checker.errors:
-        return False, "\n".join(safety_checker.errors)
+        error_msg = "\n".join(safety_checker.errors)
+        SignalViewer.log_message_static(f"Expression validation failed: Safety checks: {error_msg}", WARNING)
+        return False, error_msg
 
+    SignalViewer.log_message_static("Expression validation successful", DEBUG)
     return True, ""
 
 def validate_signal_name(name: str, existing_names: list) -> tuple[bool, str]:
@@ -117,15 +143,23 @@ def validate_signal_name(name: str, existing_names: list) -> tuple[bool, str]:
     Returns:
         tuple[bool, str]: (is_valid, error_message)
     """
+    SignalViewer.log_message_static(f"Validating signal name: '{name}'", DEBUG)
+
     if not name:
+        SignalViewer.log_message_static("Signal name validation failed: Name is empty", WARNING)
         return False, "Signal name cannot be empty"
 
     if not re.match(r"^[A-Za-z_][A-Za-z0-9_\- ]*$", name):
-        return False, "Signal name can only contain letters, digits, underscores, hyphens, and spaces, and must start with a letter"
+        error_msg = "Signal name can only contain letters, digits, underscores, hyphens, and spaces, and must start with a letter"
+        SignalViewer.log_message_static(f"Signal name validation failed: {error_msg}", WARNING)
+        return False, error_msg
 
     if name in existing_names:
-        return False, f"Signal with name '{name}' already exists"
+        error_msg = f"Signal with name '{name}' already exists"
+        SignalViewer.log_message_static(f"Signal name validation failed: {error_msg}", WARNING)
+        return False, error_msg
 
+    SignalViewer.log_message_static(f"Signal name '{name}' validation successful", DEBUG)
     return True, ""
 
 
@@ -142,32 +176,50 @@ def compute_virtual_signal(expression, alias_mapping, data_signals):
     Returns:
         tuple: (time_array, values_array) for the computed virtual signal
     """
+    SignalViewer.log_message_static(f"Computing virtual signal from expression: '{expression}'", INFO)
+    SignalViewer.log_message_static(f"Alias mapping: {alias_mapping}", DEBUG)
+
     # Create a namespace with the signal values
     namespace = {}
 
     # Basic validation
     if not alias_mapping:
-        raise ValueError("No signal aliases provided")
+        error_msg = "No signal aliases provided"
+        SignalViewer.log_message_static(error_msg, ERROR)
+        raise ValueError(error_msg)
 
     # Get the time array from the first signal
     try:
         first_signal = list(alias_mapping.values())[0]
+        SignalViewer.log_message_static(f"Using '{first_signal}' as reference for time array", DEBUG)
+
         if first_signal not in data_signals:
-            raise ValueError(f"Signal '{first_signal}' not found in data")
+            error_msg = f"Signal '{first_signal}' not found in data"
+            SignalViewer.log_message_static(error_msg, ERROR)
+            raise ValueError(error_msg)
+
         time_array, _ = data_signals[first_signal]
+        SignalViewer.log_message_static(f"Reference time array length: {len(time_array)}", DEBUG)
     except (IndexError, KeyError) as e:
-        raise ValueError(f"Error accessing first signal: {str(e)}")
+        error_msg = f"Error accessing first signal: {str(e)}"
+        SignalViewer.log_message_static(error_msg, ERROR)
+        raise ValueError(error_msg)
 
     # Add each signal's values to the namespace
     for alias, signal_name in alias_mapping.items():
         if signal_name not in data_signals:
-            raise ValueError(f"Signal '{signal_name}' not found in data")
+            error_msg = f"Signal '{signal_name}' not found in data"
+            SignalViewer.log_message_static(error_msg, ERROR)
+            raise ValueError(error_msg)
 
         try:
             time_vals, signal_vals = data_signals[signal_name]
             namespace[alias] = signal_vals
+            SignalViewer.log_message_static(f"Added signal '{signal_name}' to namespace as '{alias}', length={len(signal_vals)}", DEBUG)
         except Exception as e:
-            raise ValueError(f"Error extracting data for signal '{signal_name}': {str(e)}")
+            error_msg = f"Error extracting data for signal '{signal_name}': {str(e)}"
+            SignalViewer.log_message_static(error_msg, ERROR)
+            raise ValueError(error_msg)
 
     # Add numpy functions to namespace
     safe_numpy = {
@@ -175,37 +227,44 @@ def compute_virtual_signal(expression, alias_mapping, data_signals):
         'abs': np.abs, 'sqrt': np.sqrt, 'log': np.log,
         'exp': np.exp, 'pi': np.pi
     }
+    SignalViewer.log_message_static(f"Added safe NumPy functions to namespace: {list(safe_numpy.keys())}", DEBUG)
 
     try:
         # Safely evaluate the expression
+        SignalViewer.log_message_static(f"Evaluating expression: '{expression}'", DEBUG)
         result = eval(expression, {"__builtins__": {}, "np": safe_numpy}, namespace)
 
         # Debug output
-        print(f"Expression result type: {type(result)}")
+        SignalViewer.log_message_static(f"Expression result type: {type(result)}", DEBUG)
 
         # Check if result is array-like
         if result is None:
-            raise ValueError("Expression returned None")
+            error_msg = "Expression returned None"
+            SignalViewer.log_message_static(error_msg, ERROR)
+            raise ValueError(error_msg)
 
         if not hasattr(result, '__len__'):
-            print(f"Converting scalar {result} to array")
+            SignalViewer.log_message_static(f"Converting scalar {result} to array", DEBUG)
             result = np.full_like(time_array, result)
         elif not isinstance(result, np.ndarray):
-            print(f"Converting {type(result)} to numpy array")
+            SignalViewer.log_message_static(f"Converting {type(result)} to numpy array", DEBUG)
             result = np.array(result)
 
         # Ensure result has same length as time_array
         if len(result) != len(time_array):
-            raise ValueError(
-                f"Expression result length ({len(result)}) doesn't match time array length ({len(time_array)})")
+            error_msg = f"Result length ({len(result)}) doesn't match time array length ({len(time_array)})"
+            SignalViewer.log_message_static(error_msg, ERROR)
+            raise ValueError(error_msg)
 
+        SignalViewer.log_message_static("Virtual signal computation successful", INFO)
         return time_array, result
 
     except Exception as e:
         import traceback
-        print(f"Expression evaluation error: {str(e)}")
-        print(traceback.format_exc())
-        raise ValueError(f"Failed to compute virtual signal: {str(e)}")
+        error_msg = f"Failed to compute virtual signal: {str(e)}"
+        SignalViewer.log_message_static(error_msg, ERROR)
+        SignalViewer.log_message_static(f"Traceback: {traceback.format_exc()}", DEBUG)
+        raise ValueError(error_msg)
 
 
 # ======================
@@ -233,10 +292,12 @@ class VirtualSignalDialog(QDialog):
             signal_names (list): List of available signal names.
             parent (QWidget, optional): Parent widget.
         """
+        SignalViewer.log_message_static("Initializing VirtualSignalDialog", DEBUG)
         super().__init__(parent)
         self.setWindowTitle("Create Virtual Signal")
         self.setMinimumWidth(500)
         self.signal_names = signal_names
+        SignalViewer.log_message_static(f"Available signals: {len(signal_names)}", DEBUG)
         self.alias_mapping = {}
 
         # Store the dialog result for later access
@@ -245,13 +306,16 @@ class VirtualSignalDialog(QDialog):
         # Default aliases for examples
         self._example_alias1 = "A" if signal_names else ""
         self._example_alias2 = "B" if len(signal_names) > 1 else ""
+        SignalViewer.log_message_static(f"Using example aliases: {self._example_alias1}, {self._example_alias2}", DEBUG)
 
         self.init_ui()
+        SignalViewer.log_message_static("VirtualSignalDialog initialization complete", DEBUG)
 
     def init_ui(self):
         """
         Creates the user interface for the dialog.
         """
+        SignalViewer.log_message_static("Setting up Virtual Signal Dialog UI", DEBUG)
         layout = QVBoxLayout(self)
 
         # Name of the new signal
@@ -290,38 +354,54 @@ class VirtualSignalDialog(QDialog):
         self.button_box.accepted.connect(self.validate_and_accept)
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)
+        SignalViewer.log_message_static("Virtual Signal Dialog UI setup complete", DEBUG)
 
     def _validate_current_expression(self):
         """
         Checks the validity of the current expression and displays the result to the user.
         """
+        SignalViewer.log_message_static("User requested expression validation", INFO)
         expression = self.expr_edit.text().strip()
+        SignalViewer.log_message_static(f"Validating expression: '{expression}'", DEBUG)
+
         aliases = sorted(set(re.findall(r"\b[A-Za-z_]\w*\b", expression)))
+        SignalViewer.log_message_static(f"Found aliases in expression: {aliases}", DEBUG)
 
         is_valid, error_msg = validate_expression(expression, aliases)
 
         if is_valid:
+            SignalViewer.log_message_static("Expression validation successful, showing confirmation message", INFO)
             QMessageBox.information(self, "Expression Validation", "The expression is syntactically correct.")
         else:
+            SignalViewer.log_message_static(f"Expression validation failed: {error_msg}, showing warning message", WARNING)
             QMessageBox.warning(self, "Expression Validation", f"Invalid expression:\n{error_msg}")
 
     def _update_alias_inputs(self):
         """
         Detects aliases used in the expression and creates dropdown menus for their assignment.
         """
+        SignalViewer.log_message_static("Updating alias input fields based on expression", DEBUG)
+
         # Remove previous alias widgets
         for i in reversed(range(self.alias_area.count())):
             item = self.alias_area.itemAt(i)
             if item:
-                w = item.layout()
-                if w:
-                    while w.count():
-                        c = w.takeAt(0).widget()
-                        if c:
-                            c.setParent(None)
+                widget = item.widget()
+                if widget:
+                    widget.deleteLater()
+                layout = item.layout()
+                if layout:
+                    # Clear this layout first
+                    for j in reversed(range(layout.count())):
+                        inner_item = layout.itemAt(j)
+                        if inner_item.widget():
+                            inner_item.widget().deleteLater()
+                    # Then remove the layout
+                    self.alias_area.removeItem(item)
 
         expression = self.expr_edit.text()
         aliases = sorted(set(re.findall(r"\b[A-Za-z_]\w*\b", expression)))
+        SignalViewer.log_message_static(f"Found {len(aliases)} aliases in expression: {aliases}", DEBUG)
 
         self.alias_mapping.clear()
 
@@ -334,6 +414,7 @@ class VirtualSignalDialog(QDialog):
             row.addWidget(combo)
             self.alias_area.addLayout(row)
             self.alias_mapping[alias] = combo
+            SignalViewer.log_message_static(f"Added dropdown for alias '{alias}'", DEBUG)
 
     def get_result(self):
         """
@@ -345,6 +426,7 @@ class VirtualSignalDialog(QDialog):
         name = self.name_edit.text().strip()
         expr = self.expr_edit.text().strip()
         mapping = {alias: combo.currentText() for alias, combo in self.alias_mapping.items()}
+        SignalViewer.log_message_static(f"Getting dialog result - name: '{name}', expression: '{expr}', mapping: {mapping}", DEBUG)
         return name, expr, mapping
 
     def validate_and_accept(self):
@@ -352,36 +434,46 @@ class VirtualSignalDialog(QDialog):
         Validates the input and accepts the dialog on success.
         Checks the signal name, expression, and use of aliases.
         """
+        SignalViewer.log_message_static("Validating dialog inputs before accepting", INFO)
         name, expr, mapping = self.get_result()
 
         # Name validation
+        SignalViewer.log_message_static(f"Validating signal name: '{name}'", DEBUG)
         is_valid_name, name_error = validate_signal_name(name, self.signal_names)
         if not is_valid_name:
+            SignalViewer.log_message_static(f"Name validation failed: {name_error}", WARNING)
             QMessageBox.warning(self, "Validation Error", name_error)
             return
 
         # Expression validation
         if not expr:
+            SignalViewer.log_message_static("Expression is empty", WARNING)
             QMessageBox.warning(self, "Validation Error", "Expression is required.")
             return
 
         # Alias validations
         aliases = list(mapping.keys())
         if not aliases:
+            SignalViewer.log_message_static("No aliases detected in expression", WARNING)
             QMessageBox.warning(self, "Validation Error", "No aliases were detected in the provided expression.")
             return
 
         # Expression validity check
+        SignalViewer.log_message_static(f"Validating expression: '{expr}'", DEBUG)
         is_valid_expr, expr_error = validate_expression(expr, aliases)
         if not is_valid_expr:
+            SignalViewer.log_message_static(f"Expression validation failed: {expr_error}", WARNING)
             QMessageBox.warning(self, "Validation Error", f"Invalid expression: {expr_error}")
             return
 
         # Check if each alias has an assigned signal
-        if any(not signal_name for signal_name in mapping.values()):
+        empty_assignments = [alias for alias, signal_name in mapping.items() if not signal_name]
+        if empty_assignments:
+            SignalViewer.log_message_static(f"Missing signal assignments for aliases: {empty_assignments}", WARNING)
             QMessageBox.warning(self, "Validation Error", "Each alias must have an assigned signal.")
             return
 
         # All is well, save the result
         self._result = self.get_result()
+        SignalViewer.log_message_static("Virtual signal dialog validation successful, accepting dialog", INFO)
         super().accept()

@@ -27,6 +27,76 @@ from loader import load_multiple_files, load_single_file
 from signal_colors import SignalColors
 from signal_analysis import show_analysis_dialog
 
+# Log levels
+DEBUG = 0
+INFO = 1
+WARNING = 2
+ERROR = 3
+
+class LogWindow(QDialog):
+    """
+    A window to display log messages with different severity levels:
+    DEBUG (0), INFO (1), WARNING (2), ERROR (3)
+    """
+    # Log levels
+    DEBUG = 0
+    INFO = 1
+    WARNING = 2
+    ERROR = 3
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Log Window")
+        self.resize(600, 400)
+
+        self.layout = QVBoxLayout(self)
+        self.log_view = QTextEdit(self)
+        self.log_view.setReadOnly(True)
+        self.layout.addWidget(self.log_view)
+
+        # Layout for checkboxes
+        checkbox_layout = QHBoxLayout()
+
+        self.debug_checkbox = QCheckBox("Show Debug", self)
+        self.debug_checkbox.setChecked(False)
+        self.debug_checkbox.setToolTip("Show detailed debug messages")
+        checkbox_layout.addWidget(self.debug_checkbox)
+
+        self.autoscroll_checkbox = QCheckBox("Autoscroll", self)
+        self.autoscroll_checkbox.setChecked(True)
+        self.autoscroll_checkbox.setToolTip("Automatically scroll to newest messages")
+        checkbox_layout.addWidget(self.autoscroll_checkbox)
+
+        self.layout.addLayout(checkbox_layout)
+
+    def add_message(self, message, level=INFO):
+        """
+        Add a message to the log view.
+
+        Args:
+            message (str): The message to add.
+            level (int): Message level (DEBUG=0, INFO=1, WARNING=2, ERROR=3)
+        """
+        # Skip debug messages if debug checkbox is not checked
+        if level == LogWindow.DEBUG and not self.debug_checkbox.isChecked():
+            return
+
+        # Apply appropriate styling based on message level
+        if level == LogWindow.ERROR:
+            html = f'<span style="color:#ff5050;font-weight:bold;">{message}</span>'
+        elif level == LogWindow.WARNING:
+            html = f'<span style="color:#ffcc00;font-weight:bold;">{message}</span>'
+        elif level == LogWindow.INFO:
+            html = f'<span style="color:white;">{message}</span>'
+        else:  # DEBUG
+            html = f'<span style="color:#808080;">{message}</span>'
+
+        self.log_view.append(html)
+
+        if self.autoscroll_checkbox.isChecked():
+            scrollbar = self.log_view.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
+
 class SignalViewer(QMainWindow):
     """
     Main application window for signal plotting and interaction.
@@ -43,8 +113,19 @@ class SignalViewer(QMainWindow):
         complex_mode (bool): Whether advanced UI controls are shown.
     """
 
+    # Class-level constants for log levels
+    DEBUG = 0
+    INFO = 1
+    WARNING = 2
+    ERROR = 3
+
+    # Add the instance variable
+    instance = None
+
     def __init__(self):
         super().__init__()
+
+        SignalViewer.instance = self
 
         setConfigOption('useOpenGL', False)
         setConfigOption('enableExperimental', False)
@@ -56,7 +137,6 @@ class SignalViewer(QMainWindow):
         self.resize(1400, 800)
 
         self.log_window = LogWindow()
-        print_to_log.log_window = self.log_window
 
         # Enable drag-and-drop
         self.setAcceptDrops(True)
@@ -72,6 +152,8 @@ class SignalViewer(QMainWindow):
         self.signal_filter_text = ""
         self.color_counter = 0
 
+        self.log_message("Application starting", INFO)
+
         self.init_ui()
 
     def init_ui(self):
@@ -82,6 +164,8 @@ class SignalViewer(QMainWindow):
         - Floating ☰ button to reopen hidden panel
         - Cursor lines and status bar
         """
+        self.log_message("Initializing main UI components", DEBUG)
+
         splitter = QSplitter(Qt.Horizontal)
         self.setCentralWidget(splitter)
 
@@ -350,6 +434,7 @@ class SignalViewer(QMainWindow):
         """
         Removes all signal plots and resets widgets.
         """
+        self.log_message("Clearing all signals from plot", INFO)
         for curve in self.curves.values():
             for vb in self.viewboxes.values():
                 vb.removeItem(curve)
@@ -376,6 +461,7 @@ class SignalViewer(QMainWindow):
         for name, widgets in self.signal_widgets.items():
             if widgets['checkbox'] == cb:
                 if cb.isChecked():
+                    self.log_message(f"Displaying signal: {name}", DEBUG)
                     # Použít barvu z tlačítka, které již bylo inicializováno pomocí SignalColors
                     color = widgets['color_btn'].palette().button().color().name()
                     width = 2
@@ -405,6 +491,7 @@ class SignalViewer(QMainWindow):
                     self.signal_axis_map[axis].append(name)
                     self.signal_styles[name] = (axis, color, style['width'])
                 else:
+                    self.log_message(f"Hiding signal: {name}", DEBUG)
                     curve = self.curves.pop(name, None)
                     if curve:
                         axis = self.signal_styles[name][0]
@@ -418,6 +505,9 @@ class SignalViewer(QMainWindow):
         """
         Updates the Y-axis labels with colored names of plotted signals in one row.
         """
+        self.log_message(
+            f"Updating axis labels with {len(self.signal_axis_map['Left'])} left, {len(self.signal_axis_map['Right'])} right, {len(self.signal_axis_map['Digital'])} digital signals",
+            DEBUG)
         for axis, label in self.axis_labels.items():
             names = self.signal_axis_map.get(axis, [])
             html_parts = []
@@ -428,17 +518,36 @@ class SignalViewer(QMainWindow):
             html_text = ", ".join(html_parts) if html_parts else axis
             label.setLabel(text=html_text)
 
-    @staticmethod
-    def pick_color(btn):
+    # Replace the current static method with an instance method
+    def pick_color(self, btn):
         """
         Opens color dialog to select line color.
 
         Args:
             btn (QPushButton): The button to apply color to.
         """
+        # Find which signal this button belongs to
+        signal_name = None
+        for name, widgets in self.signal_widgets.items():
+            if widgets['color_btn'] == btn:
+                signal_name = name
+                break
+
         color = QColorDialog.getColor()
         if color.isValid():
             btn.setStyleSheet(f"background-color: {color.name()}")
+            self.log_message(f"Changed signal color for '{signal_name}' to {color.name()}", DEBUG)
+
+            # If signal is currently shown, update its color
+            if signal_name in self.curves:
+                curve = self.curves[signal_name]
+                axis, _, width = self.signal_styles[signal_name]
+                pen = pg.mkPen(color=color.name(), width=width)
+                curve.setPen(pen)
+
+                # Update signal style info
+                self.signal_styles[signal_name] = (axis, color.name(), width)
+                self.update_axis_labels()
 
     def toggle_complex_mode(self, state):
         """
@@ -447,6 +556,7 @@ class SignalViewer(QMainWindow):
         Args:
             state (bool): True to enable advanced options.
         """
+        self.log_message(f"Advanced mode {'enabled' if state else 'disabled'}", INFO)
         self.complex_mode = state
         for widgets in self.signal_widgets.values():
             widgets['axis'].setVisible(state)
@@ -461,6 +571,7 @@ class SignalViewer(QMainWindow):
             cursor (pg.InfiniteLine): The cursor line.
             state (bool): Visibility flag.
         """
+        self.log_message(f"{'Showing' if state else 'Hiding'} cursor {'A' if cursor == self.cursor_a else 'B'}", DEBUG)
         cursor.setVisible(state)
         if state:
             try:
@@ -497,6 +608,8 @@ class SignalViewer(QMainWindow):
         except Exception:
             s_a, s_b = "-", "-"
 
+        self.log_message(f"Updating cursor info: A={s_a}, B={s_b}", DEBUG)
+
         def get_vals(t, enabled):
             vals = {}
             if not enabled:
@@ -523,6 +636,7 @@ class SignalViewer(QMainWindow):
         Args:
             visible (bool): Whether to show the panel.
         """
+        self.log_message(f"Control panel {'shown' if visible else 'hidden'}", DEBUG)
         self.control_panel.setVisible(visible)
         self.show_panel_btn.setVisible(not visible)
 
@@ -533,6 +647,8 @@ class SignalViewer(QMainWindow):
         Args:
             docked (bool): If True, docks the info panel.
         """
+        self.log_message(f"Cursor info panel {'docked' if docked else 'undocked'}", DEBUG)
+
         if docked:
             for i in reversed(range(self.scroll_layout.count())):
                 widget = self.scroll_layout.itemAt(i).widget()
@@ -553,6 +669,7 @@ class SignalViewer(QMainWindow):
         Args:
             state (bool): True to show, False to hide.
         """
+        self.log_message(f"Crosshair {'enabled' if state else 'disabled'}", DEBUG)
         self.crosshair.toggle(state)
 
     def toggle_grid(self, state: bool):
@@ -562,6 +679,7 @@ class SignalViewer(QMainWindow):
         Args:
             state (bool): True = show grid, False = hide.
         """
+        self.log_message(f"Grid lines {'shown' if state else 'hidden'}", DEBUG)
         self.plot_widget.showGrid(x=state, y=state)
 
     def apply_signal_filter(self, text: str):
@@ -571,6 +689,7 @@ class SignalViewer(QMainWindow):
         Args:
             text (str): Filter string (case-insensitive).
         """
+        self.log_message(f"Filtering signals with text: '{text}'", DEBUG)
         self.signal_filter_text = text.lower().strip()
         for name, widgets in self.signal_widgets.items():
             row_widget = widgets.get('row')
@@ -583,21 +702,31 @@ class SignalViewer(QMainWindow):
         The user defines a name and an expression based on existing signals.
         If the expression is valid, the new signal is added and plotted.
         """
+        self.log_message("Opening virtual signal creation dialog", DEBUG)
+
         signal_names = list(self.data_signals.keys())
 
         if not signal_names:
             QMessageBox.warning(self, "Virtual Signal", "No signals loaded. Load some signals first.")
+            self.log_message("Cannot create virtual signal: No signals loaded", WARNING)
             return
 
         dialog = VirtualSignalDialog(signal_names, self)
         if dialog.exec():
             signal_name, expression, alias_mapping = dialog.get_result()
+
+            if expression.strip() == "":
+                self.log_message("Empty expression provided for virtual signal", WARNING)
+                return
+
             try:
                 # Use the dedicated compute_virtual_signal function from virtual_signal_dialog
                 from virtual_signal_dialog import compute_virtual_signal
 
                 # Compute the virtual signal
+                self.log_message(f"Computing virtual signal '{signal_name}' with expression: {expression}", DEBUG)
                 time_array, values = compute_virtual_signal(expression, alias_mapping, self.data_signals)
+                self.log_message(f"Virtual signal calculation complete: {len(values)} points generated", DEBUG)
 
                 # Add the virtual signal to the data dictionary
                 self.data_signals[signal_name] = (time_array, values)
@@ -611,6 +740,8 @@ class SignalViewer(QMainWindow):
 
                 QMessageBox.information(self, "Virtual Signal",
                                         f"Virtual signal '{signal_name}' created successfully.")
+                self.log_message(f"Virtual signal '{signal_name}' created successfully with expression: {expression}",
+                                 INFO)
             except Exception as e:
                 QMessageBox.critical(self, "Virtual Signal Error", str(e))
 
@@ -619,22 +750,32 @@ class SignalViewer(QMainWindow):
         Loads one or more data files depending on the 'multiple' flag.
         Updates data_signals as dict[name] = (time, values).
         """
+        self.log_message(f"Loading {'multiple' if multiple else 'single'} data file(s)...", LogWindow.INFO)
+
         if multiple:
             signals = load_multiple_files()
         else:
             signals = load_single_file()
 
         if not signals:
+            self.log_message("No data was loaded - user cancelled or file error", WARNING)
             return
+        else:
+            self.log_message(
+                f"Loaded {len(signals)} signals ({', '.join(list(signals.keys())[:5])}{'...' if len(signals) > 5 else ''})",
+                INFO)
 
+        self.log_message(f"Successfully loaded {len(signals)} signals", INFO)
         self.data_signals = signals
         self.clear_signals()
 
         for name in signals:
             row = self.build_signal_row(name)
             self.scroll_layout.addWidget(row)
+            self.log_message(f"Added signal: {name}", DEBUG)
 
     def export_graph(self):
+        self.log_message("Starting graph export...", INFO)
         try:
             from pyqtgraph.exporters import ImageExporter
             file_path, _ = QFileDialog.getSaveFileName(
@@ -643,16 +784,24 @@ class SignalViewer(QMainWindow):
             if file_path:
                 exporter = ImageExporter(self.plot_widget.plotItem)
                 exporter.export(file_path)
+                self.log_message(f"Graph exported successfully to {file_path}", INFO)
+            else:
+                self.log_message("Graph export cancelled by user", DEBUG)
         except ImportError:
-            print_to_log("pyqtgraph.exporters not available. Cannot export graph.")
+            self.log_message("pyqtgraph.exporters not available. Cannot export graph.", ERROR)
+        except Exception as e:
+            self.log_message(f"Graph export failed: {str(e)}", ERROR)
 
     def open_analysis_dialog(self):
+        self.log_message("Opening signal analysis dialog", INFO)
         show_analysis_dialog(self)
 
     def dragEnterEvent(self, event):
         """
         Accept drag events if they contain files.
         """
+        self.log_message(f"File drag detected with {len(event.mimeData().urls())} items", DEBUG)
+
         if event.mimeData().hasUrls():
             event.accept()
         else:
@@ -664,6 +813,8 @@ class SignalViewer(QMainWindow):
         """
         files = [url.toLocalFile() for url in event.mimeData().urls()]
         if files:
+            self.log_message(
+                f"Files dropped: {[os.path.basename(url.toLocalFile()) for url in event.mimeData().urls()]}", INFO)
             self.load_dropped_files(files)
 
     def load_dropped_files(self, files):
@@ -672,7 +823,10 @@ class SignalViewer(QMainWindow):
         """
         signals = load_multiple_files(files)
         if not signals:
+            self.log_message("No valid signals found in dropped files", WARNING)
             return
+        else:
+            self.log_message(f"Successfully loaded {len(signals)} signals from dropped files", INFO)
 
         self.data_signals = signals
         self.clear_signals()
@@ -697,8 +851,15 @@ class SignalViewer(QMainWindow):
         if len(time_arr) <= max_points:
             return time_arr, value_arr
 
+        self.log_message(f"Downsampling signal from {len(time_arr)} to ~{max_points} points", LogWindow.DEBUG)
+
         # Calculate stride for even sampling
         stride = len(time_arr) // max_points
+
+        if stride > 2:
+            self.log_message(
+                f"Heavy downsampling applied - using stride of {stride} (original: {len(time_arr)}, target: {max_points})",
+                WARNING)
 
         # Use stride-based sampling to reduce points
         ds_time = time_arr[::stride]
@@ -709,6 +870,8 @@ class SignalViewer(QMainWindow):
             ds_time = np.append(ds_time, time_arr[-1])
             ds_values = np.append(ds_values, value_arr[-1])
 
+        self.log_message(f"Downsampled signal from {len(time_arr)} to {len(ds_time)} points", DEBUG)
+
         return ds_time, ds_values
 
     def toggle_log_window(self, state):
@@ -718,43 +881,61 @@ class SignalViewer(QMainWindow):
         Args:
             state (bool): True to show, False to hide.
         """
+        self.log_message(f"Log window {'shown' if state else 'hidden'}", DEBUG)
+
         if state:
             self.log_window.show()
         else:
             self.log_window.hide()
 
-class LogWindow(QDialog):
-    """
-    A window to display log messages with options for debug and autoscroll.
-    """
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Log Window")
-        self.resize(600, 400)
-
-        self.layout = QVBoxLayout(self)
-        self.log_view = QTextEdit(self)
-        self.log_view.setReadOnly(True)
-        self.layout.addWidget(self.log_view)
-
-        self.debug_checkbox = QCheckBox("Debug", self)
-        self.debug_checkbox.setChecked(False)
-        self.layout.addWidget(self.debug_checkbox)
-
-        self.autoscroll_checkbox = QCheckBox("Autoscroll", self)
-        self.autoscroll_checkbox.setChecked(True)
-        self.layout.addWidget(self.autoscroll_checkbox)
-
-    def add_message(self, message, is_debug):
+    def log_message(self, message, level=LogWindow.INFO):
         """
-        Add a message to the log view.
+        Logs a message to the log window, console, and optionally a file.
 
         Args:
-            message (str): The message to add.
-            is_debug (bool): Whether the message is a debug-level message.
+            message (str): The message to log.
+            level (int): Message level (DEBUG=0, INFO=1, WARNING=2, ERROR=3)
         """
-        if not is_debug or (is_debug and self.debug_checkbox.isChecked()):
-            self.log_view.append(message)
-            if self.autoscroll_checkbox.isChecked():
-                scrollbar = self.log_view.verticalScrollBar()
-                scrollbar.setValue(scrollbar.maximum())
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Get level name for the message
+        level_names = {
+            LogWindow.DEBUG: "DEBUG",
+            LogWindow.INFO: "INFO",
+            LogWindow.WARNING: "WARNING",
+            LogWindow.ERROR: "ERROR"
+        }
+        level_name = level_names.get(level, "INFO")
+
+        formatted_message = f"[{timestamp}] {level_name}: {message}"
+
+        # Log to console (colorize for terminal if possible)
+        print(formatted_message)
+
+        # Log to the log window if it exists
+        if hasattr(self, 'log_window'):
+            self.log_window.add_message(formatted_message, level)
+
+    @staticmethod
+    def log_message_static(message, level=INFO):
+        """
+        Static method to log messages globally via the SignalViewer instance.
+        Can be called from anywhere in the code without a direct instance reference.
+
+        Args:
+            message (str): The message to log.
+            level (int): Message level (DEBUG=0, INFO=1, WARNING=2, ERROR=3)
+        """
+        if hasattr(SignalViewer, 'instance') and SignalViewer.instance:
+            SignalViewer.instance.log_message(message, level)
+        else:
+            # Fallback if no instance exists
+            level_names = {
+                LogWindow.DEBUG: "DEBUG",
+                LogWindow.INFO: "INFO",
+                LogWindow.WARNING: "WARNING",
+                LogWindow.ERROR: "ERROR"
+            }
+            level_name = level_names.get(level, "INFO")
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{timestamp}] {level_name}: {message}")
