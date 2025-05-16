@@ -57,7 +57,26 @@ def load_multiple_files(file_paths=None):
                 else:
                     all_signals[name].append((time_arr, values))
 
+    # Process and merge the signals
     result = {}
+    for name, signal_parts in all_signals.items():
+        # Sort parts by time
+        signal_parts.sort(key=lambda x: x[0][0])
+
+        # Concatenate time and value arrays
+        time_arrays = []
+        value_arrays = []
+
+        for time_arr, values in signal_parts:
+            time_arrays.append(time_arr)
+            value_arrays.append(values)
+
+        # Merge into single arrays
+        merged_time = np.concatenate(time_arrays)
+        merged_values = np.concatenate(value_arrays)
+
+        # Store in result dictionary
+        result[name] = (merged_time, merged_values)
 
     return result
 
