@@ -11,8 +11,8 @@ from pyqtgraph import setConfigOption
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QCheckBox, QScrollArea, QSplitter, QStatusBar,
-    QComboBox, QColorDialog, QSpinBox, QLineEdit,
-    QFileDialog, QGraphicsProxyWidget, QMessageBox
+    QComboBox, QColorDialog, QSpinBox, QLineEdit, QDialog,
+    QFileDialog, QGraphicsProxyWidget, QMessageBox, QTextEdit
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
@@ -46,11 +46,17 @@ class SignalViewer(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        setConfigOption('useOpenGL', False)
+        setConfigOption('enableExperimental', False)
+
         icon_path = os.path.join(os.path.dirname(__file__), "assets", "line-graph.ico")
         self.setWindowIcon(QIcon(icon_path))
 
         self.setWindowTitle("CSV Signal Viewer")
         self.resize(1400, 800)
+
+        self.log_window = LogWindow()
+        print_to_log.log_window = self.log_window
 
         # Enable drag-and-drop
         self.setAcceptDrops(True)
@@ -67,9 +73,6 @@ class SignalViewer(QMainWindow):
         self.color_counter = 0
 
         self.init_ui()
-
-        setConfigOption('useOpenGL', True)
-        setConfigOption('enableExperimental', True)
 
     def init_ui(self):
         """
@@ -182,8 +185,6 @@ class SignalViewer(QMainWindow):
         left_column.addWidget(self.toggle_mode_btn)
 
         self.toggle_panel_btn = QPushButton("Hide Panel")
-        self.toggle_panel_btn.setCheckable(True)
-        self.toggle_panel_btn.setChecked(True)
         self.toggle_panel_btn.toggled.connect(self.toggle_right_panel)
         self.toggle_panel_btn.setToolTip("Hide the control panel")
         left_column.addWidget(self.toggle_panel_btn)
@@ -271,9 +272,8 @@ class SignalViewer(QMainWindow):
         self.cursor_b_chk.setToolTip("Show/hide cyan vertical cursor line")
         col2.addWidget(self.cursor_b_chk)
 
-        #TODO Přidat funkci pro log - Tohle je zatím jen placeholder
         self.show_log_chk = QCheckBox("Show Log")
-        self.show_log_chk.toggled.connect(self.toggle_cursor_info_mode)
+        self.show_log_chk.toggled.connect(self.toggle_log_window)
         self.show_log_chk.setToolTip("Show application log messages")
         col2.addWidget(self.show_log_chk)
 
@@ -644,7 +644,7 @@ class SignalViewer(QMainWindow):
                 exporter = ImageExporter(self.plot_widget.plotItem)
                 exporter.export(file_path)
         except ImportError:
-            print("pyqtgraph.exporters not available. Cannot export graph.")
+            print_to_log("pyqtgraph.exporters not available. Cannot export graph.")
 
     def open_analysis_dialog(self):
         show_analysis_dialog(self)
@@ -680,3 +680,81 @@ class SignalViewer(QMainWindow):
         for name in signals:
             row = self.build_signal_row(name)
             self.scroll_layout.addWidget(row)
+
+    def downsample_signal(self, time_arr, value_arr, max_points):
+        """
+        Downsamples time and value arrays to have at most max_points.
+        Preserves shape and important features while reducing memory usage.
+
+        Args:
+            time_arr (np.ndarray): Original time array
+            value_arr (np.ndarray): Original values array
+            max_points (int): Maximum number of points to keep
+
+        Returns:
+            tuple: (downsampled_time, downsampled_values)
+        """
+        if len(time_arr) <= max_points:
+            return time_arr, value_arr
+
+        # Calculate stride for even sampling
+        stride = len(time_arr) // max_points
+
+        # Use stride-based sampling to reduce points
+        ds_time = time_arr[::stride]
+        ds_values = value_arr[::stride]
+
+        # Ensure we keep the last point for proper range representation
+        if len(time_arr) > 0 and ds_time[-1] != time_arr[-1]:
+            ds_time = np.append(ds_time, time_arr[-1])
+            ds_values = np.append(ds_values, value_arr[-1])
+
+        return ds_time, ds_values
+
+    def toggle_log_window(self, state):
+        """
+        Show or hide the log window.
+
+        Args:
+            state (bool): True to show, False to hide.
+        """
+        if state:
+            self.log_window.show()
+        else:
+            self.log_window.hide()
+
+class LogWindow(QDialog):
+    """
+    A window to display log messages with options for debug and autoscroll.
+    """
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Log Window")
+        self.resize(600, 400)
+
+        self.layout = QVBoxLayout(self)
+        self.log_view = QTextEdit(self)
+        self.log_view.setReadOnly(True)
+        self.layout.addWidget(self.log_view)
+
+        self.debug_checkbox = QCheckBox("Debug", self)
+        self.debug_checkbox.setChecked(False)
+        self.layout.addWidget(self.debug_checkbox)
+
+        self.autoscroll_checkbox = QCheckBox("Autoscroll", self)
+        self.autoscroll_checkbox.setChecked(True)
+        self.layout.addWidget(self.autoscroll_checkbox)
+
+    def add_message(self, message, is_debug):
+        """
+        Add a message to the log view.
+
+        Args:
+            message (str): The message to add.
+            is_debug (bool): Whether the message is a debug-level message.
+        """
+        if not is_debug or (is_debug and self.debug_checkbox.isChecked()):
+            self.log_view.append(message)
+            if self.autoscroll_checkbox.isChecked():
+                scrollbar = self.log_view.verticalScrollBar()
+                scrollbar.setValue(scrollbar.maximum())
