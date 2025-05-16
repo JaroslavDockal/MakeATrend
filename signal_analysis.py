@@ -16,359 +16,14 @@ Usage:
 import numpy as np
 import pyqtgraph as pg
 import pywt
-import scipy.signal as signal
-import scipy.stats as stats
+import scipy.signal as sc_signal
+import scipy.stats as sc_stats
 from scipy.signal import hilbert, butter, filtfilt, correlate
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QDialog, QPushButton, QTableWidget, QTableWidgetItem,
                                QHeaderView, QComboBox, QWidget, QHBoxLayout, QGroupBox,
                                QTabWidget, QFormLayout, QDoubleSpinBox, QTextEdit, QSplitter,
                                QVBoxLayout, QGridLayout, QScrollArea, QMainWindow)
-
-
-class SignalAnalysisTools:
-    """
-    Basic signal analysis tools for analyzing time-series data.
-    """
-
-    @staticmethod
-    def calculate_statistics(parent, signal_name):
-        """
-        Calculate basic statistics for a signal.
-
-        Args:
-            parent: The parent application instance containing data_signals.
-            signal_name (str): Name of the signal to analyze.
-
-        Returns:
-            dict: Dictionary of statistical metrics.
-        """
-        _, values = parent.data_signals[signal_name]
-
-        return {
-            "Mean": np.mean(values),
-            "Median": np.median(values),
-            "Minimum Value": np.min(values),
-            "Maximum Value": np.max(values),
-            "Range (Max - Min)": np.max(values) - np.min(values),
-            "Standard Deviation": np.std(values),
-            "Variance": np.var(values),
-            "Root Mean Square (RMS)": np.sqrt(np.mean(np.square(values))),
-            "Number of Samples": len(values),
-            "Skewness": stats.skew(values),
-            "Kurtosis": stats.kurtosis(values),
-            "Interquartile Range (IQR)": np.percentile(values, 75) - np.percentile(values, 25)
-        }
-
-    @staticmethod
-    def perform_fft_analysis(parent, signal_name):
-        """
-        Perform FFT analysis on a signal and display the results.
-
-        Args:
-            parent: The parent application instance containing data_signals.
-            signal_name (str): Name of the signal to analyze.
-
-        Returns:
-            tuple: (freqs, magnitudes) - The frequency and magnitude data
-        """
-        time_arr, values = parent.data_signals[signal_name]
-
-        # Calculate sampling frequency and adjust if irregular
-        fs = 1 / np.mean(np.diff(time_arr))
-
-        # Compute FFT
-        n = len(values)
-        fft_values = np.fft.rfft(values)
-        freqs = np.fft.rfftfreq(n, 1 / fs)
-        magnitudes = np.abs(fft_values) / n * 2  # Scale appropriately
-
-        return time_arr, values, freqs, magnitudes
-
-    @staticmethod
-    def analyze_signal(parent, signal_name):
-        """
-        Perform comprehensive time domain analysis of a signal.
-
-        Args:
-            parent: The parent application instance containing data_signals.
-            signal_name (str): Name of the signal to analyze.
-
-        Returns:
-            dict: Dictionary of analysis results.
-        """
-        time_arr, values = parent.data_signals[signal_name]
-
-        # Time domain analysis
-        duration = time_arr[-1] - time_arr[0]
-        sample_rate = len(values) / duration
-
-        # Calculate zero crossings
-        zero_crossings = np.sum(np.diff(np.signbit(values).astype(int)) != 0)
-
-        # Calculate signal energy and power
-        energy = np.sum(values ** 2)
-        power = energy / len(values)
-
-        return {
-            "Duration (s)": duration,
-            "Sample Rate (Hz)": sample_rate,
-            "Zero Crossings": zero_crossings,
-            "Signal Energy": energy,
-            "Signal Power": power,
-            "Crest Factor": np.max(np.abs(values)) / np.sqrt(np.mean(values ** 2)) if np.mean(values ** 2) > 0 else 0
-        }
-
-class AdvancedSignalAnalysisTools:
-    """
-    A collection of advanced signal analysis methods for processing time-series signal data.
-    """
-
-    @staticmethod
-    def calculate_psd(parent, signal_name):
-        """
-        Calculate the Power Spectral Density (PSD) of a signal.
-
-        Args:
-            parent: The parent application instance containing data_signals.
-            signal_name (str): Name of the signal to analyze.
-
-        Returns:
-            tuple: Frequencies and PSD values.
-        """
-        time_arr, values = parent.data_signals[signal_name]
-        fs = 1 / np.mean(np.diff(time_arr))  # Sampling frequency
-        freqs, psd = signal.welch(values, fs=fs, nperseg=256)
-
-        # Calculate some PSD statistics
-        psd_stats = {
-            "Peak Frequency (Hz)": freqs[np.argmax(psd)],
-            "Max Power (dB)": 10 * np.log10(np.max(psd)),
-            "Total Power": np.sum(psd)
-        }
-
-        return freqs, psd, psd_stats
-
-    @staticmethod
-    def autocorrelation(parent, signal_name):
-        """
-        Calculate the autocorrelation of a signal.
-
-        Args:
-            parent: The parent application instance containing data_signals.
-            signal_name (str): Name of the signal to analyze.
-
-        Returns:
-            tuple: Lag times and autocorrelation values.
-        """
-        time_arr, values = parent.data_signals[signal_name]
-        autocorr = np.correlate(values, values, mode='full')
-        # Normalize
-        autocorr = autocorr / np.max(autocorr)
-        lags = np.arange(-len(values) + 1, len(values))
-        return lags * np.mean(np.diff(time_arr)), autocorr
-
-    @staticmethod
-    def detect_peaks(parent, signal_name, height=None, distance=None):
-        """
-        Detect peaks in a signal and analyze their properties.
-
-        Args:
-            parent: The parent application instance containing data_signals.
-            signal_name (str): Name of the signal to analyze.
-            height (float, optional): Minimum height of peaks.
-            distance (int, optional): Minimum distance between peaks.
-
-        Returns:
-            dict: Dictionary containing peak indices, times, and values.
-        """
-        time_arr, values = parent.data_signals[signal_name]
-        peaks, properties = signal.find_peaks(values, height=height, distance=distance)
-
-        # Calculate additional peak properties
-        peak_heights = values[peaks]
-        peak_widths = signal.peak_widths(values, peaks, rel_height=0.5)[0]
-
-        return {
-            "Count": len(peaks),
-            "Indices": peaks,
-            "Times": time_arr[peaks],
-            "Heights": peak_heights,
-            "Mean Height": np.mean(peak_heights) if len(peak_heights) > 0 else 0,
-            "Max Height": np.max(peak_heights) if len(peak_heights) > 0 else 0,
-            "Mean Width": np.mean(peak_widths) if len(peak_widths) > 0 else 0
-        }
-
-    @staticmethod
-    def hilbert_transform(parent, signal_name):
-        """
-        Apply Hilbert transform to compute signal envelope and instantaneous frequency.
-
-        Args:
-            parent: The parent application instance containing data_signals.
-            signal_name (str): Name of the signal to analyze.
-
-        Returns:
-            dict: Dictionary with envelope, instantaneous phase, and frequency.
-        """
-        time_arr, values = parent.data_signals[signal_name]
-        analytic_signal = hilbert(values)
-
-        # Envelope is the magnitude of the analytic signal
-        envelope = np.abs(analytic_signal)
-
-        # Instantaneous phase
-        inst_phase = np.unwrap(np.angle(analytic_signal))
-
-        # Instantaneous frequency is the derivative of the phase
-        dt = np.mean(np.diff(time_arr))
-        inst_freq = np.diff(inst_phase) / (2.0 * np.pi * dt)
-
-        return {
-            "envelope": (time_arr, envelope),
-            "phase": (time_arr, inst_phase),
-            "frequency": (time_arr[:-1], inst_freq)
-        }
-
-    @staticmethod
-    def cross_correlation(parent, signal1_name, signal2_name):
-        """
-        Calculate cross-correlation between two signals.
-
-        Args:
-            parent: The parent application instance containing data_signals.
-            signal1_name (str): Name of the first signal.
-            signal2_name (str): Name of the second signal.
-
-        Returns:
-            tuple: Lag times, correlation values, and max lag.
-        """
-        time1, values1 = parent.data_signals[signal1_name]
-        time2, values2 = parent.data_signals[signal2_name]
-
-        # Ensure signals have the same length by padding with zeros
-        if len(values1) > len(values2):
-            values2 = np.pad(values2, (0, len(values1) - len(values2)))
-        elif len(values2) > len(values1):
-            values1 = np.pad(values1, (0, len(values2) - len(values1)))
-
-        corr = correlate(values1, values2, mode='full')
-        # Normalize
-        corr = corr / np.sqrt(np.sum(values1**2) * np.sum(values2**2))
-
-        dt = np.mean(np.diff(time1))
-        lags = np.arange(-len(values1) + 1, len(values1))
-        lag_times = lags * dt
-
-        # Find maximum correlation and corresponding lag
-        max_corr_idx = np.argmax(np.abs(corr))
-        max_lag = lag_times[max_corr_idx]
-
-        return lag_times, corr, max_lag
-
-    @staticmethod
-    def wavelet_transform(parent, signal_name, wavelet='db4', level=5):
-        """
-        Perform wavelet transform on the signal.
-
-        Args:
-            parent: The parent application instance containing data_signals.
-            signal_name (str): Name of the signal to analyze.
-            wavelet (str): Wavelet type.
-            level (int): Decomposition level.
-
-        Returns:
-            tuple: List of coefficients, approximation, and details.
-        """
-        _, values = parent.data_signals[signal_name]
-
-        # Perform wavelet decomposition
-        coeffs = pywt.wavedec(values, wavelet, level=level)
-        approx = coeffs[0]  # Approximation
-        details = coeffs[1:]  # Details
-
-        return coeffs, approx, details
-
-    @staticmethod
-    def energy_in_intervals(parent, signal_name, num_intervals=10):
-        """
-        Analyze energy in time intervals.
-
-        Args:
-            parent: The parent application instance containing data_signals.
-            signal_name (str): Name of the signal to analyze.
-            num_intervals (int): Number of intervals to divide signal.
-
-        Returns:
-            tuple: Interval centers and energy values.
-        """
-        time_arr, values = parent.data_signals[signal_name]
-
-        # Divide signal into intervals
-        interval_size = len(values) // num_intervals
-        intervals = [values[i:i+interval_size] for i in range(0, len(values), interval_size) if i + interval_size <= len(values)]
-
-        # Calculate energy in each interval
-        energy = [np.sum(interval**2) for interval in intervals]
-
-        # Center time of each interval
-        interval_centers = []
-        for i in range(len(intervals)):
-            start_idx = i * interval_size
-            end_idx = min(start_idx + interval_size - 1, len(time_arr) - 1)
-            interval_centers.append((time_arr[start_idx] + time_arr[end_idx]) / 2)
-
-        return interval_centers, energy
-
-    @staticmethod
-    def phase_analysis(parent, signal_name):
-        """
-        Analyze phase of a signal.
-
-        Args:
-            parent: The parent application instance containing data_signals.
-            signal_name (str): Name of the signal to analyze.
-
-        Returns:
-            tuple: Time array, phase values, and phase statistics.
-        """
-        time_arr, values = parent.data_signals[signal_name]
-        analytic_signal = hilbert(values)
-        phase = np.unwrap(np.angle(analytic_signal))
-
-        # Calculate phase statistics
-        phase_stats = {
-            "Mean Phase": np.mean(phase),
-            "Phase Std Dev": np.std(phase),
-            "Phase Range": np.max(phase) - np.min(phase)
-        }
-
-        return time_arr, phase, phase_stats
-
-    @staticmethod
-    def cepstrum_analysis(parent, signal_name):
-        """
-        Perform cepstral analysis of a signal.
-
-        Args:
-            parent: The parent application instance containing data_signals.
-            signal_name (str): Name of the signal to analyze.
-
-        Returns:
-            tuple: Quefrency, cepstrum values.
-        """
-        time_arr, values = parent.data_signals[signal_name]
-
-        # Calculate real cepstrum
-        spectrum = np.fft.fft(values)
-        log_spectrum = np.log(np.abs(spectrum) + 1e-10)  # Add small value to avoid log(0)
-        cepstrum = np.fft.ifft(log_spectrum).real
-
-        # Generate quefrency axis
-        dt = np.mean(np.diff(time_arr))
-        quefrency = np.arange(len(cepstrum)) * dt
-
-        return quefrency, cepstrum
 
 
 class SignalAnalysisDialog(QDialog):
@@ -440,14 +95,17 @@ class SignalAnalysisDialog(QDialog):
         button_layout = QHBoxLayout()
 
         stats_btn = QPushButton("Basic Statistics")
+        stats_btn.setToolTip("View basic statistical metrics of the signal.")
         stats_btn.clicked.connect(self.show_statistics)
         button_layout.addWidget(stats_btn)
 
         fft_btn = QPushButton("FFT Analysis")
+        fft_btn.setToolTip("Analyze the frequency spectrum of the signal.")
         fft_btn.clicked.connect(self.show_fft)
         button_layout.addWidget(fft_btn)
 
         time_analysis_btn = QPushButton("Time Domain Analysis")
+        time_analysis_btn.setToolTip("Examine time-domain characteristics of the signal.")
         time_analysis_btn.clicked.connect(self.show_time_analysis)
         button_layout.addWidget(time_analysis_btn)
 
@@ -468,14 +126,17 @@ class SignalAnalysisDialog(QDialog):
         adv_button_layout = QHBoxLayout()
 
         psd_btn = QPushButton("Power Spectral Density")
+        psd_btn.setToolTip("Visualize the power distribution across frequencies.")
         psd_btn.clicked.connect(self.show_psd_analysis)
         adv_button_layout.addWidget(psd_btn)
 
         autocorr_btn = QPushButton("Autocorrelation")
+        autocorr_btn.setToolTip("Measure the signal's self-similarity over time.")
         autocorr_btn.clicked.connect(self.show_autocorrelation)
         adv_button_layout.addWidget(autocorr_btn)
 
         peaks_btn = QPushButton("Peak Detection")
+        peaks_btn.setToolTip("Identify and display peaks in the signal.")
         peaks_btn.clicked.connect(self.show_peak_detection)
         adv_button_layout.addWidget(peaks_btn)
 
@@ -484,14 +145,17 @@ class SignalAnalysisDialog(QDialog):
         adv_button_layout2 = QHBoxLayout()
 
         filter_btn = QPushButton("Apply Filter")
+        filter_btn.setToolTip("Apply a frequency filter to the signal.")
         filter_btn.clicked.connect(self.show_filter_dialog)
         adv_button_layout2.addWidget(filter_btn)
 
         hilbert_btn = QPushButton("Hilbert Transform")
+        hilbert_btn.setToolTip("Extract amplitude, phase, and frequency details.")
         hilbert_btn.clicked.connect(self.show_hilbert_transform)
         adv_button_layout2.addWidget(hilbert_btn)
 
         energy_btn = QPushButton("Energy Analysis")
+        energy_btn.setToolTip("Evaluate the energy distribution of the signal.")
         energy_btn.clicked.connect(self.show_energy_analysis)
         adv_button_layout2.addWidget(energy_btn)
 
@@ -500,14 +164,17 @@ class SignalAnalysisDialog(QDialog):
         adv_button_layout3 = QHBoxLayout()
 
         phase_btn = QPushButton("Phase Analysis")
+        phase_btn.setToolTip("Inspect the phase behavior of the signal.")
         phase_btn.clicked.connect(self.show_phase_analysis)
         adv_button_layout3.addWidget(phase_btn)
 
         cepstrum_btn = QPushButton("Cepstral Analysis")
+        cepstrum_btn.setToolTip("Reveal periodic patterns in the signal's spectrum.")
         cepstrum_btn.clicked.connect(self.show_cepstrum_analysis)
         adv_button_layout3.addWidget(cepstrum_btn)
 
         wavelet_btn = QPushButton("Wavelet Transform")
+        wavelet_btn.setToolTip("Decompose the signal into time-frequency components.")
         wavelet_btn.clicked.connect(self.show_wavelet_dialog)
         adv_button_layout3.addWidget(wavelet_btn)
 
@@ -530,6 +197,7 @@ class SignalAnalysisDialog(QDialog):
         cross_button_layout = QHBoxLayout()
 
         xcorr_btn = QPushButton("Cross Correlation")
+        xcorr_btn.setToolTip("Compare and find similarities between two signals.")
         xcorr_btn.clicked.connect(self.show_cross_correlation)
         cross_button_layout.addWidget(xcorr_btn)
 
@@ -556,8 +224,8 @@ class SignalAnalysisDialog(QDialog):
 
         self.splitter.addWidget(results_container)
 
-        # Set initial sizes of the splitter areas (e.g., 60% top, 40% bottom)
-        self.splitter.setSizes([600, 400])
+        # Set initial sizes of the splitter areas (e.g., 30% top, 70% bottom)
+        self.splitter.setSizes([300, 700])
 
         # Close button
         close_btn = QPushButton("Close")
@@ -623,7 +291,23 @@ class SignalAnalysisDialog(QDialog):
         if not signal:
             return
 
-        stats = SignalAnalysisTools.calculate_statistics(self.parent, signal)
+        # Get the signal values directly
+        _, values = self.parent.data_signals[signal]
+
+        # Calculate statistics directly on the original values
+        stats = {
+            "Mean": np.mean(values),
+            "Median": np.median(values),
+            "Standard Deviation": np.std(values),
+            "Variance": np.var(values),
+            "Min": np.min(values),
+            "Max": np.max(values),
+            "Range": np.max(values) - np.min(values),
+            "RMS": np.sqrt(np.mean(values ** 2)),
+            "Skewness": sc_stats.skew(values),
+            "Kurtosis": sc_stats.kurtosis(values)
+        }
+
         self.show_analysis_results("Statistics", signal, stats)
 
     def show_fft(self):
@@ -632,8 +316,20 @@ class SignalAnalysisDialog(QDialog):
         if not signal:
             return
 
-        # Get FFT data without creating window
-        time_arr, values, freqs, magnitudes = SignalAnalysisTools.perform_fft_analysis(self.parent, signal)
+        # Get the source signal data
+        time_arr, values = self.parent.data_signals[signal]
+
+        # Process the signal values directly
+        processed_values = prepare_signal_for_analysis(self, values, "FFT Input Signal")
+        if processed_values is None:
+            return  # User canceled the operation
+
+        # Perform FFT analysis
+        fs = 1 / np.mean(np.diff(time_arr))  # Sampling frequency
+        n = len(processed_values)
+        fft_values = np.fft.rfft(processed_values)
+        freqs = np.fft.rfftfreq(n, d=1 / fs)
+        magnitudes = np.abs(fft_values) / n * 2  # Scale appropriately
 
         # Create a proper window using QMainWindow
         plot_window = QMainWindow(self)
@@ -652,7 +348,7 @@ class SignalAnalysisDialog(QDialog):
         p1.setTitle("Time Domain")
         p1.setLabel('left', 'Amplitude')
         p1.setLabel('bottom', 'Time (s)')
-        p1.plot(time_arr, values, pen='b')
+        p1.plot(time_arr, processed_values, pen='b')
 
         # Frequency domain plot
         p2 = plot_widget.addPlot(row=1, col=0)
@@ -684,7 +380,32 @@ class SignalAnalysisDialog(QDialog):
         if not signal:
             return
 
-        analysis = SignalAnalysisTools.analyze_signal(self.parent, signal)
+        # Get the source signal data directly
+        time_arr, values = self.parent.data_signals[signal]
+
+        # Time domain analysis
+        duration = time_arr[-1] - time_arr[0]
+        sample_rate = len(values) / duration
+
+        # Calculate zero crossings
+        zero_crossings = np.sum(np.diff(np.signbit(values).astype(int)) != 0)
+
+        # Calculate signal energy and power
+        energy = np.sum(values ** 2)
+        power = energy / len(values)
+
+        analysis = {
+            "Duration (s)": duration,
+            "Samples": len(values),
+            "Sample Rate (Hz)": sample_rate,
+            "Zero Crossings": zero_crossings,
+            "Mean Amplitude": np.mean(values),
+            "Peak Amplitude": np.max(np.abs(values)),
+            "Energy": energy,
+            "Power": power,
+            "Crest Factor": np.max(np.abs(values)) / np.sqrt(np.mean(values ** 2))
+        }
+
         self.show_analysis_results("Time Analysis", signal, analysis)
 
     def show_psd_analysis(self):
@@ -693,7 +414,25 @@ class SignalAnalysisDialog(QDialog):
         if not signal:
             return
 
-        freqs, psd, psd_stats = AdvancedSignalAnalysisTools.calculate_psd(self.parent, signal)
+        # Get the source signal data
+        time_arr, values = self.parent.data_signals[signal]
+
+        # Process the signal values directly
+        processed_values = prepare_signal_for_analysis(self, values, "PSD Input Signal")
+        if processed_values is None:
+            return  # User canceled the operation
+
+        # Calculate PSD
+        fs = 1 / np.mean(np.diff(time_arr)) if len(time_arr) > 1 else 1  # Sampling frequency
+        freqs, psd = sc_signal.welch(processed_values, fs=fs, nperseg=256)
+
+        # Calculate some PSD statistics
+
+        psd_stats = {
+            "Peak Frequency (Hz)": freqs[np.argmax(psd)],
+            "Max Power (dB)": 10 * np.log10(np.max(psd)),
+            "Total Power": np.sum(psd)
+        }
 
         # Create a proper window using QMainWindow
         plot_window = QMainWindow(self)
@@ -735,10 +474,18 @@ class SignalAnalysisDialog(QDialog):
         if not signal:
             return
 
-        # Calculate autocorrelation
-        lag_times, corr = AdvancedSignalAnalysisTools.autocorrelation(
-            self.parent, signal
-        )
+        # Get the source signal data directly
+        time_arr, values = self.parent.data_signals[signal]
+
+        # Calculate autocorrelation directly on the original values
+        autocorr = np.correlate(values, values, mode='full')
+
+        # Normalize
+        autocorr = autocorr / np.max(autocorr)
+
+        # Create lag array
+        lags = np.arange(-len(values) + 1, len(values))
+        lag_times = lags * np.mean(np.diff(time_arr))
 
         # Create a proper window using QMainWindow
         plot_window = QMainWindow(self)
@@ -753,7 +500,7 @@ class SignalAnalysisDialog(QDialog):
         plot_widget = pg.PlotWidget(title=f"Autocorrelation: {signal}")
         plot_widget.setLabel('left', 'Correlation')
         plot_widget.setLabel('bottom', 'Lag (s)')
-        plot_widget.plot(lag_times, corr, pen='b')
+        plot_widget.plot(lag_times, autocorr, pen='b')
 
         # Add close button
         close_button = QPushButton("Close")
@@ -772,17 +519,49 @@ class SignalAnalysisDialog(QDialog):
         self._plot_windows.append(plot_window)
 
     def show_peak_detection(self):
-        """Detect and analyze peaks in the selected signal."""
+        """Detect and analyze peaks in the selected signal. For predominantly negative signals,
+            negative peaks (valleys) are detected and reported instead of positive peaks."""
         signal = self.get_selected_signal(self.adv_signal_combo)
         if not signal:
             return
 
+        # Get the source signal data directly
         time_arr, values = self.parent.data_signals[signal]
 
+        # Determine if we should look for positive or negative peaks
+        signal_mean = np.mean(values)
+        if np.all(values < 0) or (
+                np.any(values < 0) and abs(np.min(values) - signal_mean) > abs(np.max(values) - signal_mean)):
+            # For predominantly negative signals, look for negative peaks (valleys)
+            # We invert the signal to use the same peak finding algorithm
+            processed_values = -values
+            peak_type = "negative"
+        else:
+            # For positive or mixed signals, look for positive peaks
+            processed_values = values
+            peak_type = "positive"
+
         # Use default parameters for peak detection
-        peaks_data = AdvancedSignalAnalysisTools.detect_peaks(
-            self.parent, signal, height=np.mean(values), distance=10
-        )
+        peaks, properties = sc_signal.find_peaks(processed_values, height=None, distance=None)
+
+        # Calculate additional peak properties
+        peak_heights = processed_values[peaks]
+        if peak_type == "negative":
+            # Convert heights back to negative for display
+            peak_heights = -peak_heights
+
+        peak_widths = sc_signal.peak_widths(processed_values, peaks, rel_height=0.5)[0]
+
+        peaks_data = {
+            "Peak Type": "Negative" if peak_type == "negative" else "Positive",
+            "Count": len(peaks),
+            "Indices": peaks,
+            "Times": time_arr[peaks],
+            "Heights": peak_heights,
+            "Mean Height": np.mean(peak_heights) if len(peak_heights) > 0 else 0,
+            "Max Height": np.max(peak_heights) if len(peak_heights) > 0 else 0,
+            "Mean Width": np.mean(peak_widths) if len(peak_widths) > 0 else 0
+        }
 
         # Create a proper window using QMainWindow
         plot_window = QMainWindow(self)
@@ -803,12 +582,12 @@ class SignalAnalysisDialog(QDialog):
 
         # Highlight peaks
         peak_plot = pg.ScatterPlotItem(
-            x=peaks_data["Times"],
-            y=peaks_data["Heights"],
+            x=time_arr[peaks],
+            y=values[peaks],
             symbol='o',
             size=10,
-            pen='r',
-            brush='r'
+            pen=pg.mkPen('r', width=2),
+            brush=pg.mkBrush('r')
         )
         plot_widget.addItem(peak_plot)
 
@@ -839,10 +618,10 @@ class SignalAnalysisDialog(QDialog):
         Display the original and filtered signals in a new window.
 
         Args:
-            original_values (array): The original signal values.
-            filtered_values (array): The filtered signal values.
-            filter_type (str): The type of filter applied.
-            signal_name (str): The name of the signal.
+            original_values: The original signal values
+            filtered_values: The filtered signal values
+            filter_type: Type of applied filter (e.g., "Lowpass")
+            signal_name: Name of the signal
         """
         # Create a new window for displaying the signals
         plot_window = QMainWindow(self)
@@ -905,8 +684,11 @@ class SignalAnalysisDialog(QDialog):
 
         # Filter type
         filter_type_lowpass = QRadioButton("Lowpass")
+        filter_type_lowpass.setToolTip("Allow frequencies below the cutoff to pass.")
         filter_type_highpass = QRadioButton("Highpass")
+        filter_type_highpass.setToolTip("Allow frequencies above the cutoff to pass.")
         filter_type_bandpass = QRadioButton("Bandpass")
+        filter_type_bandpass.setToolTip("Allow frequencies within a specific range to pass.")
         filter_type_lowpass.setChecked(True)
 
         filter_group = QGroupBox("Filter Type")
@@ -924,16 +706,19 @@ class SignalAnalysisDialog(QDialog):
         cutoff_low_spin.setRange(0.1, 1000)
         cutoff_low_spin.setValue(10)
         cutoff_low_spin.setSuffix(" Hz")
+        cutoff_low_spin.setToolTip("Set the lower cutoff frequency for the filter.")
 
         cutoff_high_spin = QDoubleSpinBox()
         cutoff_high_spin.setRange(0.1, 1000)
         cutoff_high_spin.setValue(100)
         cutoff_high_spin.setSuffix(" Hz")
         cutoff_high_spin.setEnabled(filter_type_bandpass.isChecked())
+        cutoff_high_spin.setToolTip("Set the upper cutoff frequency for the bandpass filter")
 
         filter_order_spin = QSpinBox()
         filter_order_spin.setRange(1, 10)
         filter_order_spin.setValue(4)
+        filter_order_spin.setToolTip("Specify the order of the filter (higher values result in sharper transitions).")
 
         params_layout.addRow("Cutoff Frequency (Low):", cutoff_low_spin)
         params_layout.addRow("Cutoff Frequency (High):", cutoff_high_spin)
@@ -1019,7 +804,23 @@ class SignalAnalysisDialog(QDialog):
         if not signal:
             return
 
-        results = AdvancedSignalAnalysisTools.hilbert_transform(self.parent, signal)
+        # Get the source signal data
+        time_arr, values = self.parent.data_signals[signal]
+
+        # Process the signal values directly
+        processed_values = prepare_signal_for_analysis(self, values, "Hilbert Input Signal")
+        if processed_values is None:
+            return  # User canceled the operation
+
+        # Calculate Hilbert transform directly
+        analytic_signal = hilbert(processed_values)
+        amplitude_envelope = np.abs(analytic_signal)
+        instantaneous_phase = np.unwrap(np.angle(analytic_signal))
+
+        # Calculate instantaneous frequency (derivative of phase)
+        instantaneous_frequency = np.diff(instantaneous_phase) / (2.0 * np.pi * np.mean(np.diff(time_arr)))
+        # Add a zero to match original length (since diff reduces length by 1)
+        instantaneous_frequency = np.append(instantaneous_frequency, instantaneous_frequency[-1])
 
         # Create a proper window using QMainWindow
         plot_window = QMainWindow(self)
@@ -1038,10 +839,8 @@ class SignalAnalysisDialog(QDialog):
         p1.setTitle("Original Signal with Envelope")
         p1.setLabel('left', 'Amplitude')
         p1.setLabel('bottom', 'Time (s)')
-
-        time_arr, values = self.parent.data_signals[signal]
-        p1.plot(time_arr, values, pen='b', name="Signal")
-        p1.plot(results["envelope"][0], results["envelope"][1], pen='r', name="Envelope")
+        p1.plot(time_arr, processed_values, pen='b', name="Signal")
+        p1.plot(time_arr, amplitude_envelope, pen='r', name="Envelope")
         p1.addLegend()
 
         # Phase plot
@@ -1049,14 +848,14 @@ class SignalAnalysisDialog(QDialog):
         p2.setTitle("Instantaneous Phase")
         p2.setLabel('left', 'Phase (rad)')
         p2.setLabel('bottom', 'Time (s)')
-        p2.plot(results["phase"][0], results["phase"][1], pen='g')
+        p2.plot(time_arr, instantaneous_phase, pen='g')
 
         # Frequency plot
         p3 = plot_widget.addPlot(row=2, col=0)
         p3.setTitle("Instantaneous Frequency")
         p3.setLabel('left', 'Frequency (Hz)')
         p3.setLabel('bottom', 'Time (s)')
-        p3.plot(results["frequency"][0], results["frequency"][1], pen='y')
+        p3.plot(time_arr, instantaneous_frequency, pen='y')
 
         # Add close button
         close_button = QPushButton("Close")
@@ -1076,9 +875,9 @@ class SignalAnalysisDialog(QDialog):
 
         # Show summary in results area
         self.show_analysis_results("Hilbert Transform", signal, {
-            "Mean Envelope": np.mean(results["envelope"][1]),
-            "Max Envelope": np.max(results["envelope"][1]),
-            "Mean Inst. Frequency": np.mean(results["frequency"][1])
+            "Mean Envelope": np.mean(amplitude_envelope),
+            "Max Envelope": np.max(amplitude_envelope),
+            "Mean Inst. Frequency": np.mean(instantaneous_frequency)
         })
 
     def show_energy_analysis(self):
@@ -1087,7 +886,35 @@ class SignalAnalysisDialog(QDialog):
         if not signal:
             return
 
-        interval_centers, energy = AdvancedSignalAnalysisTools.energy_in_intervals(self.parent, signal)
+        # Get the source signal data
+        time_arr, values = self.parent.data_signals[signal]
+
+        # Process the signal values directly
+        processed_values = prepare_signal_for_analysis(self, values, "Energy Analysis Input Signal")
+        if processed_values is None:
+            return  # User canceled the operation
+
+        # Calculate energy distribution across time intervals
+        num_intervals = 20  # Divide the signal into 20 intervals
+        interval_size = len(processed_values) // num_intervals
+
+        # Calculate energy in each interval
+        energy = []
+        interval_centers = []
+
+        for i in range(num_intervals):
+            start_idx = i * interval_size
+            end_idx = start_idx + interval_size if i < num_intervals - 1 else len(processed_values)
+            segment = processed_values[start_idx:end_idx]
+
+            # Energy calculation (sum of squares)
+            segment_energy = np.sum(segment ** 2)
+            energy.append(segment_energy)
+
+            # Calculate the center time of this interval
+            center_time = time_arr[start_idx] + (
+                        time_arr[min(end_idx - 1, len(time_arr) - 1)] - time_arr[start_idx]) / 2
+            interval_centers.append(center_time)
 
         # Create a proper window using QMainWindow
         plot_window = QMainWindow(self)
@@ -1140,7 +967,27 @@ class SignalAnalysisDialog(QDialog):
         if not signal:
             return
 
-        time_arr, phase, phase_stats = AdvancedSignalAnalysisTools.phase_analysis(self.parent, signal)
+        # Get the source signal data
+        time_arr, values = self.parent.data_signals[signal]
+
+        # Process the signal values directly
+        processed_values = prepare_signal_for_analysis(self, values, "Phase Analysis Input Signal")
+        if processed_values is None:
+            return  # User canceled the operation
+
+        # Calculate Hilbert transform to get phase information
+        analytic_signal = hilbert(processed_values)
+
+        # Extract instantaneous phase and unwrap to avoid phase jumps
+        phase = np.unwrap(np.angle(analytic_signal))
+
+        # Calculate phase statistics
+        phase_stats = {
+            "Mean Phase": np.mean(phase),
+            "Phase Standard Deviation": np.std(phase),
+            "Phase Range": np.max(phase) - np.min(phase),
+            "Phase Rate of Change": np.mean(np.abs(np.diff(phase))) / np.mean(np.diff(time_arr))
+        }
 
         # Create a proper window using QMainWindow
         plot_window = QMainWindow(self)
@@ -1181,7 +1028,29 @@ class SignalAnalysisDialog(QDialog):
         if not signal:
             return
 
-        quefrency, cepstrum = AdvancedSignalAnalysisTools.cepstrum_analysis(self.parent, signal)
+        # Get the source signal data
+        time_arr, values = self.parent.data_signals[signal]
+
+        # Process the signal values directly
+        processed_values = prepare_signal_for_analysis(self, values, "Cepstrum Analysis Input Signal")
+        if processed_values is None:
+            return  # User canceled the operation
+
+        # Calculate sampling rate
+        fs = 1 / np.mean(np.diff(time_arr))
+
+        # Compute FFT of the log of the magnitude spectrum (cepstrum)
+        spectrum = np.fft.fft(processed_values)
+        log_spectrum = np.log(np.abs(spectrum) + 1e-10)  # Add small value to avoid log(0)
+        cepstrum = np.abs(np.fft.ifft(log_spectrum))
+
+        # Calculate quefrency axis (time)
+        n = len(cepstrum)
+        quefrency = np.arange(n) / fs
+
+        # We only need the first half of the cepstrum (symmetric)
+        quefrency = quefrency[:n // 2]
+        cepstrum = cepstrum[:n // 2]
 
         # Create a proper window using QMainWindow
         plot_window = QMainWindow(self)
@@ -1214,14 +1083,21 @@ class SignalAnalysisDialog(QDialog):
         # Keep reference to prevent garbage collection
         self._plot_windows.append(plot_window)
 
-        # Find maximum in cepstrum (excluding the first bin)
-        max_idx = np.argmax(cepstrum[1:]) + 1
-        fundamental_period = quefrency[max_idx]
+        # Find maximum in cepstrum (excluding the first few bins which often contain DC components)
+        start_bin = 5  # Skip first few bins to avoid DC and very low quefrency components
+        if len(cepstrum) > start_bin:
+            max_idx = np.argmax(cepstrum[start_bin:]) + start_bin
+            fundamental_period = quefrency[max_idx]
+            fundamental_frequency = 1.0 / fundamental_period if fundamental_period > 0 else float('inf')
+        else:
+            max_idx = 0
+            fundamental_period = 0
+            fundamental_frequency = float('inf')
 
         cepstrum_stats = {
             "Fundamental Period": fundamental_period,
-            "Fundamental Frequency": 1.0 / fundamental_period if fundamental_period > 0 else float('inf'),
-            "Peak Cepstrum Value": cepstrum[max_idx]
+            "Fundamental Frequency": fundamental_frequency,
+            "Peak Cepstrum Value": cepstrum[max_idx] if max_idx < len(cepstrum) else 0
         }
         self.show_analysis_results("Cepstrum Analysis", signal, cepstrum_stats)
 
@@ -1240,6 +1116,7 @@ class SignalAnalysisDialog(QDialog):
         form_layout = QFormLayout()
         self.wavelet_combo = QComboBox()
         self.wavelet_combo.addItems(["db4", "db8", "sym4", "sym8", "coif1", "coif3", "haar"])
+        self.wavelet_combo.setToolTip("Select the type of wavelet to use for the transform.")
         form_layout.addRow("Wavelet Type:", self.wavelet_combo)
 
         # Decomposition level
@@ -1248,6 +1125,7 @@ class SignalAnalysisDialog(QDialog):
         self.level_spin.setMinimum(1)
         self.level_spin.setMaximum(10)
         self.level_spin.setValue(5)
+        self.level_spin.setToolTip("Set the decomposition level (higher levels analyze broader time scales).")
         form_layout.addRow("Decomposition Level:", self.level_spin)
 
         layout.addLayout(form_layout)
@@ -1270,70 +1148,93 @@ class SignalAnalysisDialog(QDialog):
         wavelet = self.wavelet_combo.currentText()
         level = int(self.level_spin.value())
 
-        coeffs, approx, details = AdvancedSignalAnalysisTools.wavelet_transform(
-            self.parent, signal, wavelet, level)
-
-        # Create a proper window using QMainWindow
-        plot_window = QMainWindow(self)
-        plot_window.setWindowTitle(f"Wavelet Transform: {signal}")
-        plot_window.resize(800, 600)
-
-        # Create central widget with layout
-        central_widget = QWidget()
-        layout = QVBoxLayout(central_widget)
-
-        # Create GraphicsLayoutWidget for plots
-        plot_widget = pg.GraphicsLayoutWidget()
-
-        # Original signal
-        p1 = plot_widget.addPlot(row=0, col=0)
-        p1.setTitle("Original Signal")
+        # Get the source signal data
         time_arr, values = self.parent.data_signals[signal]
-        p1.plot(time_arr, values, pen='b')
 
-        # Approximation
-        p2 = plot_widget.addPlot(row=1, col=0)
-        p2.setTitle(f"Approximation (Level {level})")
-        p2.plot(np.linspace(0, time_arr[-1], len(approx)), approx, pen='r')
+        # Process the signal values directly
+        processed_values = prepare_signal_for_analysis(self, values, "Wavelet Input Signal")
+        if processed_values is None:
+            return  # User canceled the operation
 
-        # Details for each level
-        for i, detail in enumerate(details):
-            p = plot_widget.addPlot(row=i + 2, col=0)
-            p.setTitle(f"Detail Level {level - i}")
-            p.plot(np.linspace(0, time_arr[-1], len(detail)), detail, pen='g')
+        # Perform wavelet decomposition
+        try:
+            # Use PyWavelets for the wavelet transform
+            coeffs = pywt.wavedec(processed_values, wavelet, level=level)
 
-        # Add close button
-        close_button = QPushButton("Close")
-        close_button.clicked.connect(plot_window.close)
+            # Extract approximation and details
+            approx = coeffs[0]  # Approximation coefficients at the final level
+            details = coeffs[1:]  # Detail coefficients at all levels
 
-        # Set up layout
-        layout.addWidget(plot_widget)
-        layout.addWidget(close_button)
-        central_widget.setLayout(layout)
-        plot_window.setCentralWidget(central_widget)
+            # Create a proper window using QMainWindow
+            plot_window = QMainWindow(self)
+            plot_window.setWindowTitle(f"Wavelet Transform: {signal}")
+            plot_window.resize(800, 600)
 
-        # Show the window
-        plot_window.show()
+            # Create central widget with layout
+            central_widget = QWidget()
+            layout = QVBoxLayout(central_widget)
 
-        # Keep reference to prevent garbage collection
-        self._plot_windows.append(plot_window)
+            # Create GraphicsLayoutWidget for plots
+            plot_widget = pg.GraphicsLayoutWidget()
 
-        # Calculate energy in each component
-        energy_approx = np.sum(approx ** 2)
-        energy_details = [np.sum(d ** 2) for d in details]
-        total_energy = energy_approx + sum(energy_details)
+            # Original signal
+            p1 = plot_widget.addPlot(row=0, col=0)
+            p1.setTitle("Original Signal")
+            p1.plot(time_arr, processed_values, pen='b')
 
-        wavelet_stats = {
-            "Approximation Energy": energy_approx,
-            "Approximation Energy %": 100 * energy_approx / total_energy,
-        }
+            # Approximation
+            p2 = plot_widget.addPlot(row=1, col=0)
+            p2.setTitle(f"Approximation (Level {level})")
+            p2.plot(np.linspace(0, time_arr[-1], len(approx)), approx, pen='r')
 
-        for i, e in enumerate(energy_details):
-            wavelet_stats[f"Detail {level - i} Energy"] = e
-            wavelet_stats[f"Detail {level - i} Energy %"] = 100 * e / total_energy
+            # Details for each level
+            for i, detail in enumerate(details):
+                p = plot_widget.addPlot(row=i + 2, col=0)
+                p.setTitle(f"Detail Level {level - i}")
+                p.plot(np.linspace(0, time_arr[-1], len(detail)), detail, pen='g')
 
-        self.show_analysis_results("Wavelet Transform", signal, wavelet_stats)
-        dialog.accept()
+            # Add close button
+            close_button = QPushButton("Close")
+            close_button.clicked.connect(plot_window.close)
+
+            # Set up layout
+            layout.addWidget(plot_widget)
+            layout.addWidget(close_button)
+            central_widget.setLayout(layout)
+            plot_window.setCentralWidget(central_widget)
+
+            # Show the window
+            plot_window.show()
+
+            # Keep reference to prevent garbage collection
+            self._plot_windows.append(plot_window)
+
+            # Calculate energy in each component
+            energy_approx = np.sum(approx ** 2)
+            energy_details = [np.sum(d ** 2) for d in details]
+            total_energy = energy_approx + sum(energy_details)
+
+            # Prepare statistics for results display
+            wavelet_stats = {
+                "Wavelet Type": wavelet,
+                "Decomposition Level": level,
+                "Total Energy": total_energy,
+                "Approximation Energy": energy_approx,
+                "Approximation Energy %": 100 * energy_approx / total_energy
+            }
+
+            # Add each detail level's energy percentage
+            for i, e in enumerate(energy_details):
+                wavelet_stats[f"Detail Level {level - i} Energy %"] = 100 * e / total_energy
+
+            self.show_analysis_results("Wavelet Transform", signal, wavelet_stats)
+            dialog.accept()
+
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Wavelet Transform Error",
+                                 f"Error performing wavelet transform: {str(e)}")
+            dialog.reject()
 
     def show_cross_correlation(self):
         """Calculate and display cross-correlation between two signals."""
@@ -1343,10 +1244,31 @@ class SignalAnalysisDialog(QDialog):
         if not signal1 or not signal2:
             return
 
+        # Get the source signal data directly
+        time_arr1, values1 = self.parent.data_signals[signal1]
+        time_arr2, values2 = self.parent.data_signals[signal2]
+
+        # Handle signals with different lengths by padding the shorter one
+        if len(values1) > len(values2):
+            values2 = np.pad(values2, (0, len(values1) - len(values2)), 'constant')
+        elif len(values2) > len(values1):
+            values1 = np.pad(values1, (0, len(values2) - len(values1)), 'constant')
+
         # Calculate cross-correlation
-        lag_times, corr, max_lag = AdvancedSignalAnalysisTools.cross_correlation(
-            self.parent, signal1, signal2
-        )
+        corr = correlate(values1, values2, mode='full')
+
+        # Normalize to [-1, 1] range
+        corr_normalized = corr / np.sqrt(np.sum(values1 ** 2) * np.sum(values2 ** 2))
+
+        # Create lag time array based on actual time data
+        sample_period = np.mean(np.diff(time_arr1))  # Average time between samples
+        lags = np.arange(-len(values1) + 1, len(values1))
+        lag_times = lags * sample_period
+
+        # Find the lag with maximum correlation
+        max_idx = np.argmax(np.abs(corr_normalized))
+        max_lag = lag_times[max_idx]
+        max_corr = corr_normalized[max_idx]
 
         # Create a proper window using QMainWindow
         plot_window = QMainWindow(self)
@@ -1361,11 +1283,10 @@ class SignalAnalysisDialog(QDialog):
         plot_widget = pg.PlotWidget(title=f"Cross-Correlation: {signal1} vs {signal2}")
         plot_widget.setLabel('left', 'Correlation')
         plot_widget.setLabel('bottom', 'Lag (s)')
-        plot_widget.plot(lag_times, corr, pen='b')
+        plot_widget.plot(lag_times, corr_normalized, pen='b')
 
         # Add vertical line at max correlation
-        max_idx = np.argmax(np.abs(corr))
-        vline = pg.InfiniteLine(pos=lag_times[max_idx], angle=90, pen=pg.mkPen('r', width=2))
+        vline = pg.InfiniteLine(pos=max_lag, angle=90, pen=pg.mkPen('r', width=2))
         plot_widget.addItem(vline)
 
         # Add close button
@@ -1384,15 +1305,13 @@ class SignalAnalysisDialog(QDialog):
         # Keep reference to prevent garbage collection
         self._plot_windows.append(plot_window)
 
-        # Show correlation statistics
-        corr_stats = {
-            "Max Correlation": corr[max_idx],
-            "Max Correlation Lag": lag_times[max_idx],
-            "Time Shift": f"{lag_times[max_idx]:.4f} seconds"
+        # Show results in results area
+        correlation_stats = {
+            "Maximum Correlation": max_corr,
+            "Lag at Maximum (s)": max_lag,
+            "Correlation at Zero Lag": corr_normalized[len(corr_normalized) // 2]
         }
-        self.show_analysis_results(f"Cross-Correlation: {signal1} vs {signal2}",
-                                   f"{signal1} vs {signal2}",
-                                   corr_stats)
+        self.show_analysis_results("Cross-Correlation", f"{signal1} vs {signal2}", correlation_stats)
 
     def show_analysis_results(self, analysis_type, signal_name, results):
         """
@@ -1456,7 +1375,6 @@ class SignalAnalysisDialog(QDialog):
         group.setLayout(group_layout)
         self.results_layout.addWidget(group)
 
-
 def show_analysis_dialog(parent):
     """
     Shows the signal analysis dialog for analyzing selected signals.
@@ -1468,6 +1386,42 @@ def show_analysis_dialog(parent):
     dialog = SignalAnalysisDialog(parent)
     dialog.exec()
 
+
+def prepare_signal_for_analysis(parent, arr, label="Signal"):
+    """
+    Handles negative/mixed signals for analyses requiring positive values.
+
+    Args:
+        parent: Parent widget for displaying dialogs
+        arr: Numpy array to check
+        label: Name of analysis for user messages
+
+    Returns:
+        Processed array or None if user cancels
+    """
+    from PySide6.QtWidgets import QMessageBox
+
+    if np.all(arr > 0):
+        return arr
+    elif np.all(arr < 0):
+        QMessageBox.warning(parent, f"{label} Warning",
+                            f"All values in {label} are negative. The signal will be flipped for analysis.")
+        return -arr
+    elif np.any(arr < 0):
+        msg = QMessageBox(parent)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle(f"{label} Warning")
+        msg.setText(f"{label} contains both positive and negative values.\n"
+                    "Do you want to continue with absolute values?")
+        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        result = msg.exec()
+        if result == QMessageBox.Yes:
+            return np.abs(arr)
+        else:
+            return None
+    else:
+        # Handles cases with zeros
+        return arr
 
 class ExplanationTab(QWidget):
     def __init__(self, parent=None):
