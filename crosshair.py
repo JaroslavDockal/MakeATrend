@@ -6,7 +6,7 @@ Displays interactive vertical and horizontal lines with labels at mouse position
 import pyqtgraph as pg
 from PySide6.QtCore import Qt, QTimer
 from datetime import datetime
-
+from logger import Logger
 
 class Crosshair:
     """
@@ -25,19 +25,19 @@ class Crosshair:
         Args:
             viewbox (pg.ViewBox): The ViewBox to attach the crosshair to.
         """
-        SignalViewer.log_message_static("Initializing crosshair overlay", DEBUG)
+        Logger.log_message_static("Initializing crosshair overlay", Logger.DEBUG)
         self.viewbox = viewbox
         self.enabled = False
 
         # Dashed cross lines
-        SignalViewer.log_message_static("Creating vertical and horizontal infinite lines", DEBUG)
+        Logger.log_message_static("Creating vertical and horizontal infinite lines", Logger.DEBUG)
         self.vline = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen((200, 200, 200), style=Qt.PenStyle.DashLine))
         self.hline = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen((200, 200, 200), style=Qt.PenStyle.DashLine))
         self.viewbox.addItem(self.vline, ignoreBounds=True)
         self.viewbox.addItem(self.hline, ignoreBounds=True)
 
         # Labels
-        SignalViewer.log_message_static("Creating text labels for coordinates", DEBUG)
+        Logger.log_message_static("Creating text labels for coordinates", Logger.DEBUG)
         self.label_x = pg.TextItem(anchor=(1, 1), color=(200, 200, 200))
         self.label_y_left = pg.TextItem(anchor=(0, 0), color=(200, 200, 200))
         self.label_y_right = pg.TextItem(anchor=(1, 0), color=(200, 200, 200))
@@ -48,22 +48,22 @@ class Crosshair:
         # Signal proxy for mouse movement
         scene = self.viewbox.scene()
         if isinstance(scene, pg.GraphicsScene):
-            SignalViewer.log_message_static("Setting up mouse movement signal proxy with rate limiting", DEBUG)
+            Logger.log_message_static("Setting up mouse movement signal proxy with rate limiting", Logger.DEBUG)
             self.proxy = pg.SignalProxy(
                 scene.sigMouseMoved,
                 rateLimit=60,
                 slot=self.mouse_moved
             )
         else:
-            SignalViewer.log_message_static("Warning: ViewBox scene is not a GraphicsScene, mouse tracking may not work", WARNING)
+            Logger.log_message_static("Warning: ViewBox scene is not a GraphicsScene, mouse tracking may not work", Logger.WARNING)
 
         self.mouse_locked = False
         self.local_tz = datetime.now().astimezone().tzinfo
-        SignalViewer.log_message_static(f"Using local timezone: {self.local_tz}", DEBUG)
+        Logger.log_message_static(f"Using local timezone: {self.local_tz}", Logger.DEBUG)
 
-        SignalViewer.log_message_static("Initially hiding crosshair elements", DEBUG)
+        Logger.log_message_static("Initially hiding crosshair elements", Logger.DEBUG)
         self.hide()
-        SignalViewer.log_message_static("Crosshair initialization complete", DEBUG)
+        Logger.log_message_static("Crosshair initialization complete", Logger.DEBUG)
 
     def toggle(self, state: bool):
         """
@@ -72,21 +72,21 @@ class Crosshair:
         Args:
             state (bool): True = enable, False = disable
         """
-        SignalViewer.log_message_static(f"Toggling crosshair to {'enabled' if state else 'disabled'}", INFO)
+        Logger.log_message_static(f"Toggling crosshair to {'enabled' if state else 'disabled'}", Logger.INFO)
         self.enabled = state
         self.viewbox.setMouseEnabled(x=not state, y=not state)
         if state:
-            SignalViewer.log_message_static("Disabling mouse zoom/pan for crosshair mode", DEBUG)
+            Logger.log_message_static("Disabling mouse zoom/pan for crosshair mode", Logger.DEBUG)
             # workaround to prevent zooming on first activation
             QTimer.singleShot(0, lambda: self.viewbox.setMouseEnabled(x=False, y=False))
             self.show()
         else:
-            SignalViewer.log_message_static("Re-enabling mouse zoom/pan", DEBUG)
+            Logger.log_message_static("Re-enabling mouse zoom/pan", Logger.DEBUG)
             self.hide()
 
     def show(self):
         """Show crosshair lines and labels."""
-        SignalViewer.log_message_static("Showing crosshair elements", DEBUG)
+        Logger.log_message_static("Showing crosshair elements", Logger.DEBUG)
         self.vline.show()
         self.hline.show()
         self.label_x.show()
@@ -95,7 +95,7 @@ class Crosshair:
 
     def hide(self):
         """Hide all crosshair elements."""
-        SignalViewer.log_message_static("Hiding crosshair elements", DEBUG)
+        Logger.log_message_static("Hiding crosshair elements", Logger.DEBUG)
         self.vline.hide()
         self.hline.hide()
         self.label_x.hide()
@@ -124,7 +124,7 @@ class Crosshair:
             x = mouse_point.x()
             y = mouse_point.y()
 
-            SignalViewer.log_message_static(f"Crosshair position: x={x:.3f}, y={y:.3f}", DEBUG)
+            Logger.log_message_static(f"Crosshair position: x={x:.3f}, y={y:.3f}", Logger.DEBUG)
 
             # Move lines
             self.vline.setPos(x)
@@ -139,13 +139,13 @@ class Crosshair:
             try:
                 time_str = datetime.fromtimestamp(x, tz=self.local_tz).strftime("%H:%M:%S.%f")[:-3]
                 self.label_x.setText(f"X: {time_str}")
-                SignalViewer.log_message_static(f"Formatted timestamp: {time_str}", DEBUG)
+                Logger.log_message_static(f"Formatted timestamp: {time_str}", Logger.DEBUG)
             except Exception as e:
-                SignalViewer.log_message_static(f"Failed to format timestamp from value {x}: {str(e)}", WARNING)
+                Logger.log_message_static(f"Failed to format timestamp from value {x}: {str(e)}", Logger.WARNING)
                 self.label_x.setText("X: -")
 
             self.label_y_left.setText(f"Y: {y:.3f}")
             self.label_y_right.setText(f"Y: {y:.3f}")
 
         except Exception as e:
-            SignalViewer.log_message_static(f"Error updating crosshair: {str(e)}", ERROR)
+            Logger.log_message_static(f"Error updating crosshair: {str(e)}", Logger.ERROR)

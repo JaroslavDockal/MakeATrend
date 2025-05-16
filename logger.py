@@ -1,24 +1,64 @@
+# logger.py
+import datetime
+
 class Logger:
-    @staticmethod
-    def log_message_static(message, level=INFO):
+    # Log levels
+    DEBUG = 0
+    INFO = 1
+    WARNING = 2
+    ERROR = 3
+
+    _instance = None
+
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = Logger()
+        return cls._instance
+
+    def __init__(self):
+        self.log_window = None
+
+    def set_log_window(self, log_window):
+        self.log_window = log_window
+
+    def log_message(self, message, level=INFO):
         """
-        Static method to log messages globally via the SignalViewer instance.
-        Can be called from anywhere in the code without a direct instance reference.
+        Logs a message to the log window, console, and optionally a file.
 
         Args:
             message (str): The message to log.
             level (int): Message level (DEBUG=0, INFO=1, WARNING=2, ERROR=3)
         """
-        if hasattr(SignalViewer, 'instance') and SignalViewer.instance:
-            SignalViewer.instance.log_message(message, level)
-        else:
-            # Fallback if no instance exists
-            level_names = {
-                LogWindow.DEBUG: "DEBUG",
-                LogWindow.INFO: "INFO",
-                LogWindow.WARNING: "WARNING",
-                LogWindow.ERROR: "ERROR"
-            }
-            level_name = level_names.get(level, "INFO")
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{timestamp}] {level_name}: {message}")
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Get level name for the message
+        level_names = {
+            Logger.DEBUG: "DEBUG",
+            Logger.INFO: "INFO",
+            Logger.WARNING: "WARNING",
+            Logger.ERROR: "ERROR"
+        }
+        level_name = level_names.get(level, "INFO")
+
+        formatted_message = f"[{timestamp}] {level_name}: {message}"
+
+        # Log to console
+        print(formatted_message)
+
+        # Log to the log window if it exists
+        if self.log_window:
+            self.log_window.add_message(formatted_message, level)
+
+    @staticmethod
+    def log_message_static(message, level=INFO):
+        """
+        Static method to log messages globally.
+        Can be called from anywhere in the code.
+
+        Args:
+            message (str): The message to log.
+            level (int): Message level (DEBUG=0, INFO=1, WARNING=2, ERROR=3)
+        """
+        instance = Logger.get_instance()
+        instance.log_message(message, level)
