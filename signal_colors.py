@@ -3,6 +3,9 @@ Module with predefined colors for signals.
 Provides a set of optimized colors for distinguishing signals on a dark background.
 """
 
+import hashlib
+import random
+
 class SignalColors:
     """
     A class providing a predefined set of colors for signal visualization.
@@ -35,6 +38,15 @@ class SignalColors:
         '#FF66FF',  # Magenta
         '#CCFF00',  # Chartreuse
         '#FFFFFF',  # White
+        '#800080',  # Deep Purple
+        '#FF6347',  # Tomato Red
+        '#8A2BE2',  # Blue Violet
+        '#ADFF2F',  # Green Yellow
+        '#FF4500',  # Orange Red
+        '#2E8B57',  # Sea Green
+        '#FFD700',  # Gold
+        '#D2691E',  # Chocolate
+        '#8B0000',  # Dark Red
     ]
 
     @classmethod
@@ -66,6 +78,20 @@ class SignalColors:
         Returns:
             str: Hexadecimal color code (e.g., '#ff0000').
         """
-        hash_value = hash(name)
-        index = abs(hash_value) % len(cls.COLORS)
+        # Using SHA256 to generate a more unique and consistent hash
+        hash_value = hashlib.sha256(name.encode()).hexdigest()
+        # Using the first 8 characters of the hash to create a color index
+        index = int(hash_value[-8:], 16) % len(cls.COLORS)  # Use last 8 characters for index
         return cls.COLORS[index]
+
+    @classmethod
+    def random_color(cls) -> str:
+        """
+        Generate a random color for a signal, which is useful if the predefined colors are exhausted.
+
+        Returns:
+            str: Random Hexadecimal color code (e.g., '#ff0000').
+        """
+        random_color = "#{:02x}{:02x}{:02x}".format(random.randint(0, 255), random.randint(0, 255),
+                                                    random.randint(0, 255))
+        return random_color
