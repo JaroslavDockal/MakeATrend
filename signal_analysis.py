@@ -2314,22 +2314,22 @@ class SignalAnalysisDialog(QDialog):
                 SignalViewer.log_message_static(f"Error preparing signal: {str(e)}", ERROR)
                 return None
 
-        def show_analysis_dialog(parent):
-            """
-            Shows the signal analysis dialog with all the available analysis tools.
+def show_analysis_dialog(parent):
+    """
+    Shows the signal analysis dialog with all the available analysis tools.
 
-            This function serves as the main entry point for the signal analysis features.
+    This function serves as the main entry point for the signal analysis features.
 
-            Args:
-                parent: The parent application that has the data_signals attribute
-                       containing the signal data.
-            """
-            SignalViewer.log_message_static("Opening Signal Analysis Dialog", INFO)
-            try:
-                dialog = SignalAnalysisDialog(parent)
-                dialog.exec()
-                SignalViewer.log_message_static("Signal Analysis Dialog closed", INFO)
-            except Exception as e:
-                SignalViewer.log_message_static(f"Error in signal analysis dialog: {str(e)}", ERROR)
-                import traceback
-                SignalViewer.log_message_static(f"Signal analysis dialog traceback: {traceback.format_exc()}", DEBUG)
+    Args:
+        parent: The parent application that has the data_signals attribute
+               containing the signal data.
+    """
+    SignalViewer.log_message_static("Opening Signal Analysis Dialog", INFO)
+    try:
+        dialog = SignalAnalysisDialog(parent)
+        dialog.exec()
+        SignalViewer.log_message_static("Signal Analysis Dialog closed", INFO)
+    except Exception as e:
+        SignalViewer.log_message_static(f"Error in signal analysis dialog: {str(e)}", ERROR)
+        import traceback
+        SignalViewer.log_message_static(f"Signal analysis dialog traceback: {traceback.format_exc()}", DEBUG)

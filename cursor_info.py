@@ -15,6 +15,7 @@ import datetime
 import csv
 import re
 
+from viewer import SignalViewer
 
 class CursorInfoDialog(QDialog):
     """
