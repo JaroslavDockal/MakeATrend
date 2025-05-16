@@ -21,6 +21,34 @@ from PySide6.QtWidgets import QMessageBox, QFileDialog
 from PySide6.QtCore import QSize, QRect
 from PySide6.QtGui import QPixmap, QPainter
 
+# Globální nastavení logování
+_LOG_TO_CONSOLE = True
+_LOG_TO_FILE = True
+_LOG_FILE_PATH = "application.log"
+
+def print_to_log(message, is_debug=False):
+    """
+    Log a message to console, log window, and optionally to a file.
+
+    Args:
+        message (str): The message to log.
+        is_debug (bool): Whether the message is a debug-level message.
+    """
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    formatted_message = f"[{timestamp}] {'DEBUG' if is_debug else 'INFO'}: {message}"
+
+    # Log to console
+    if _LOG_TO_CONSOLE:
+        print(formatted_message)
+
+    # Log to file
+    if _LOG_TO_FILE:
+        with open(_LOG_FILE_PATH, "a") as log_file:
+            log_file.write(formatted_message + "\n")
+
+    # Log to GUI (pokud je okno aktivní)
+    if hasattr(print_to_log, "log_window"):
+        print_to_log.log_window.add_message(formatted_message, is_debug)
 
 # ===== CSV AND DATA PARSING FUNCTIONS =====
 
