@@ -89,10 +89,12 @@ class SignalColors:
     @classmethod
     def get_color_for_name(cls, name: str) -> str:
         """
-        Generate a consistent color for a given signal name.
+        Generate a distinct color for a given signal name with maximum variation.
 
-        A hash of the signal name is used to determine the color index, ensuring
-        that the same name always maps to the same color.
+        Creates highly saturated, bright colors that stand out clearly on dark backgrounds.
+
+        Uses the signal name as a base but introduces multiple randomization
+        factors to ensure even similar names get different colors.
 
         Args:
             name (str): Name of the signal.
@@ -100,28 +102,78 @@ class SignalColors:
         Returns:
             str: Hexadecimal color code (e.g., '#ff0000').
         """
-        Logger.log_message_static(f"Generating consistent color for signal '{name}'", Logger.DEBUG)
+        Logger.log_message_static(f"Generating color for signal '{name}'", Logger.DEBUG)
 
         if not name:
             Logger.log_message_static("Empty signal name provided, using fallback color", Logger.WARNING)
             return cls.COLORS[0]
 
         try:
-            # Using SHA256 to generate a more unique and consistent hash
-            Logger.log_message_static(f"Computing SHA256 hash for signal name '{name}'", Logger.DEBUG)
-            hash_value = hashlib.sha256(name.encode()).hexdigest()
+            # Use the name to create a hash
+            name_length = len(name)
+            Logger.log_message_static(f"Signal name length: {name_length}", Logger.DEBUG)
 
-            # Using the first 8 characters of the hash to create a color index
-            Logger.log_message_static(f"Using last 8 characters of hash for index calculation", Logger.DEBUG)
-            hash_subset = hash_value[-8:]
-            index = int(hash_subset, 16) % len(cls.COLORS)
+            prefix = name[:min(3, len(name))]
+            suffix = name[-min(3, len(name)):]
+            Logger.log_message_static(f"Signal name prefix: '{prefix}', suffix: '{suffix}'", Logger.DEBUG)
 
-            color = cls.COLORS[index]
-            Logger.log_message_static(f"Signal '{name}' mapped to color {color} (hash: ...{hash_subset}, index: {index})", Logger.DEBUG)
+            # Create a unique seed from name characteristics
+            char_sum = sum(ord(c) for c in name)
+            name_hash = hash(name)
+            prefix_suffix_hash = hash(prefix + suffix)
+            unique_chars = len(set(name))
+            length_component = name_length * 31
+
+            Logger.log_message_static(f"Name hash components calculated", Logger.DEBUG)
+
+            # Mix the components with xor operations for better distribution
+            mixed_hash = char_sum ^ name_hash ^ prefix_suffix_hash ^ (unique_chars << 8) ^ (length_component << 16)
+            Logger.log_message_static(f"Mixed hash value: {mixed_hash}", Logger.DEBUG)
+
+            # Create more vibrant colors by using extreme values in HSV space
+            # Convert hash to HSV (Hue, Saturation, Value) color space parameters
+            h = abs(mixed_hash) % 360  # Hue (0-359)
+            s = 90 + (abs(mixed_hash >> 8) % 10)  # Saturation (90-99%)
+            v = 90 + (abs(mixed_hash >> 16) % 10)  # Value/Brightness (90-99%)
+
+            Logger.log_message_static(f"HSV components - H: {h}, S: {s}, V: {v}", Logger.DEBUG)
+
+            # Convert HSV to RGB
+            # Based on HSV to RGB conversion algorithm
+            c = (v / 100) * (s / 100)
+            x = c * (1 - abs((h / 60) % 2 - 1))
+            m = (v / 100) - c
+
+            if 0 <= h < 60:
+                r, g, b = c, x, 0
+            elif 60 <= h < 120:
+                r, g, b = x, c, 0
+            elif 120 <= h < 180:
+                r, g, b = 0, c, x
+            elif 180 <= h < 240:
+                r, g, b = 0, x, c
+            elif 240 <= h < 300:
+                r, g, b = x, 0, c
+            else:
+                r, g, b = c, 0, x
+
+            # Convert to 8-bit RGB values
+            r = int(255 * (r + m))
+            g = int(255 * (g + m))
+            b = int(255 * (b + m))
+
+            Logger.log_message_static(f"Final RGB components - R: {r}, G: {g}, B: {b}", Logger.DEBUG)
+
+            # Generate the color
+            color = f"#{r:02x}{g:02x}{b:02x}"
+            Logger.log_message_static(f"Color generated for '{name}': {color}", Logger.DEBUG)
+
             return color
 
         except Exception as e:
             Logger.log_message_static(f"Error generating color for signal '{name}': {str(e)}", Logger.ERROR)
+            import traceback
+            Logger.log_message_static(f"Color generation traceback: {traceback.format_exc()}", Logger.DEBUG)
             # Fallback to a default color in case of error
             return cls.COLORS[0]
 

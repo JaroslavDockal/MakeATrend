@@ -39,7 +39,8 @@ class CursorInfoDialog(QDialog):
         self.table = QTableWidget()
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(["Signal", "A", "B", "Δ", "Δ/s"])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Interactive)
         self.layout.addWidget(self.table)
 
         self.export_btn = QPushButton("Export to CSV")
@@ -114,7 +115,7 @@ class CursorInfoDialog(QDialog):
         Logger.log_message_static(f"Cleaned signal name from '{signal_name}' to '{cleaned}'", Logger.DEBUG)
         return cleaned
 
-    def update_data(self, time_a: str, time_b: str, values_a: dict, values_b: dict, has_a: bool, has_b: bool):
+    def update_data(self, time_a: str, time_b: str, values_a: dict, values_b: dict, has_a: bool, has_b: bool, date: str):
         """
         Update the table with new cursor values.
 
@@ -139,7 +140,7 @@ class CursorInfoDialog(QDialog):
             delta_t_str = "-"
             Logger.log_message_static("Cannot calculate time delta, missing cursor", Logger.DEBUG)
 
-        self.header_label.setText(f"Cursor A: {time_a}    Cursor B: {time_b}    Δt: {delta_t_str}")
+        self.header_label.setText(f"Cursor A: {time_a}    Cursor B: {time_b}    Δt: {delta_t_str}    (Date: {date})")
         self._current_table_data = []
 
         keys = sorted(set(values_a.keys()) | set(values_b.keys()))
@@ -150,19 +151,17 @@ class CursorInfoDialog(QDialog):
             b_val = values_b.get(key, "")
             unit = self.extract_unit(key)
             clean_name = self.clean_signal_name(key)
-            is_bool = self._is_boolean(a_val, b_val)
+            is_bool = self._is_boolean(key)
 
             Logger.log_message_static(f"Processing signal '{clean_name}' [{unit}], boolean: {is_bool}", Logger.DEBUG)
             Logger.log_message_static(f"  A value: {a_val}, B value: {b_val}", Logger.DEBUG)
 
-            delta = None
-            dps = None
-
             if is_bool:
                 Logger.log_message_static(f"Boolean signal '{clean_name}', delta/dps not calculated", Logger.DEBUG)
-                # Booleans don't have meaningful deltas
-                a_val = "On" if str(a_val).strip().upper() == "TRUE" else "Off" if a_val else ""
-                b_val = "On" if str(b_val).strip().upper() == "TRUE" else "Off" if b_val else ""
+                a_val = "TRUE" if str(a_val).strip().upper() == "TRUE" else "FALSE" if a_val else ""
+                b_val = "TRUE" if str(b_val).strip().upper() == "TRUE" else "FALSE" if b_val else ""
+                delta = "---"
+                dps = "---"
             else:
                 try:
                     # Calculate numerical delta if both values exist
@@ -177,8 +176,11 @@ class CursorInfoDialog(QDialog):
                             dps = delta / delta_t
                             Logger.log_message_static(f"  Delta per second: {dps}", Logger.DEBUG)
                         else:
+                            dps = None
                             Logger.log_message_static("  Cannot calculate delta per second, invalid time delta", Logger.DEBUG)
                     else:
+                        delta = None
+                        dps = None
                         Logger.log_message_static("  Cannot calculate delta, missing value at cursor A or B", Logger.DEBUG)
                 except (ValueError, TypeError) as e:
                     # Handle conversion errors gracefully
@@ -199,28 +201,18 @@ class CursorInfoDialog(QDialog):
         Logger.log_message_static(f"Processed {len(self._current_table_data)} signals for cursor info display", Logger.DEBUG)
         self._rebuild_table()
 
-    @staticmethod
-    def _is_boolean(a_val, b_val) -> bool:
+
+    def _is_boolean(self, signal_name: str) -> bool:
         """
-        Detects if both values are textual booleans ('TRUE'/'FALSE').
+        Checks if the signal is on the Digital axis.
 
         Args:
-            a_val: Value at cursor A
-            b_val: Value at cursor B
+            signal_name (str): Name of the signal.
 
         Returns:
-            bool: True if both are 'TRUE' or 'FALSE'
+            bool: True if the signal is on the Digital axis, False otherwise.
         """
-        valid = {"TRUE", "FALSE"}
-        try:
-            a_bool = str(a_val).strip().upper() in valid
-            b_bool = str(b_val).strip().upper() in valid
-            result = a_bool and b_bool
-            Logger.log_message_static(f"Boolean detection: a={a_bool}, b={b_bool}, result={result}", Logger.DEBUG)
-            return result
-        except Exception as e:
-            Logger.log_message_static(f"Error in boolean detection: {str(e)}", Logger.WARNING)
-            return False
+        return signal_name in self.parent().signal_axis_map.get('Digital', [])
 
     def _format_val(self, val, unit="", is_bool=False):
         """

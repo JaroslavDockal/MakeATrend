@@ -18,7 +18,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from pyqtgraph import DateAxisItem
 
-from utils import find_nearest_index, is_digital_signal
+from utils import find_nearest_index, is_digital_signal, export_graph
 from cursor_info import CursorInfoDialog
 from crosshair import Crosshair
 from custom_viewbox import CustomViewBox
@@ -27,7 +27,6 @@ from loader import load_multiple_files, load_single_file
 from signal_colors import SignalColors
 from signal_analysis import show_analysis_dialog
 from logger import Logger
-
 
 class LogWindow(QDialog):
     """
@@ -202,8 +201,9 @@ class SignalViewer(QMainWindow):
         self.show_panel_btn = QPushButton("☰")
         self.show_panel_btn.setFixedSize(30, 30)
         self.show_panel_btn.setStyleSheet("background-color: gray; color: white; font-weight: bold; border: none;")
-        self.show_panel_btn.clicked.connect(lambda: self.toggle_panel_btn.setChecked(True))
+        self.show_panel_btn.clicked.connect(lambda: self.toggle_panel_btn.setChecked(False))
         self.show_panel_btn.setToolTip("Show control panel")
+        self.show_panel_btn.setVisible(False)
 
         self.proxy_btn = QGraphicsProxyWidget()
         self.proxy_btn.setWidget(self.show_panel_btn)
@@ -230,10 +230,14 @@ class SignalViewer(QMainWindow):
         self.viewboxes['Digital'].setYRange(-0.1, 1.1, padding=0.1)
 
         self.signal_axis_map = {k: [] for k in self.viewboxes}
+
+        digital_axis = pg.AxisItem('right')
+        digital_axis.setTicks([[(0, "F"), (1, "T")]])
+
         self.axis_labels = {
             'Left': self.plot_widget.getAxis('left'),
             'Right': self.plot_widget.getAxis('right'),
-            'Digital': pg.AxisItem('right')
+            'Digital': digital_axis
         }
 
         self.plot_widget.showAxis('right')
@@ -278,13 +282,13 @@ class SignalViewer(QMainWindow):
         left_column.addWidget(self.toggle_mode_btn)
 
         self.toggle_panel_btn = QPushButton("Hide Panel")
-        self.toggle_mode_btn.setCheckable(True)
+        self.toggle_panel_btn.setCheckable(True)
         self.toggle_panel_btn.toggled.connect(self.toggle_right_panel)
-        self.toggle_panel_btn.setToolTip("Hide the control panel")
+        self.toggle_panel_btn.setToolTip("Hide control panel")
         left_column.addWidget(self.toggle_panel_btn)
 
         export_btn = QPushButton("Export Graph")
-        export_btn.clicked.connect(self.export_graph)
+        export_btn.clicked.connect(self.export_graph_via_utils)
         export_btn.setToolTip("Save current graph as image (PNG) or PDF file")
         right_column.addWidget(export_btn)
 
@@ -483,20 +487,36 @@ class SignalViewer(QMainWindow):
                     if is_digital_signal(self.data_signals[name]):
                         axis = 'Digital'
                         style = dict(stepMode=True, width=3)
+                        pen = pg.mkPen(color=color, **style)
                         self.viewboxes['Digital'].setYRange(-0.1, 1.1, padding=0.1)
+                        # Convert TRUE/FALSE to 1.0/0.0
+                        time_arr, value_arr = self.data_signals[name]
+                        self.log_message(f"Original values for {name}: {value_arr}", Logger.DEBUG)
+                        numeric_values = np.array(
+                            [1.0 if str(val).upper() == 'TRUE' else 0.0 for val in value_arr if val is not None],
+                            dtype=np.float32)
+                        self.log_message(f"Converted values for {name}: {value_arr}", Logger.DEBUG)
+
+                        # Use the converted numeric values instead of the original ones
+                        curve = pg.PlotCurveItem(x=time_arr, y=numeric_values, pen=pen)
+
+                        # Force the x-axis to show proper time range for digital signals
+                        if len(time_arr) > 0:
+                            self.main_view.setXRange(min(time_arr), max(time_arr), padding=0.1)
+                            self.plot_widget.getAxis('bottom').setVisible(True)
                     else:
                         style = dict(width=width)
+                        pen = pg.mkPen(color=color, **style)
+                        time_arr, value_arr = self.data_signals[name]
 
-                    pen = pg.mkPen(color=color, **style)
-                    time_arr, value_arr = self.data_signals[name]
+                        # Downsample data before plotting
+                        # Only downsample if checkbox is checked
+                        if hasattr(self, 'downsample_chk') and self.downsample_chk.isChecked():
+                            max_points = self.downsample_points.value()
+                            time_arr, value_arr = self.downsample_signal(time_arr, value_arr, max_points)
 
-                    # Downsample data before plotting
-                    # Only downsample if checkbox is checked
-                    if hasattr(self, 'downsample_chk') and self.downsample_chk.isChecked():
-                        max_points = self.downsample_points.value()
-                        time_arr, value_arr = self.downsample_signal(time_arr, value_arr, max_points)
+                        curve = pg.PlotCurveItem(x=time_arr, y=value_arr, pen=pen)
 
-                    curve = pg.PlotCurveItem(x=time_arr, y=value_arr, pen=pen)
                     self.viewboxes[axis].addItem(curve)
                     self.curves[name] = curve
                     self.signal_axis_map[axis].append(name)
@@ -531,8 +551,14 @@ class SignalViewer(QMainWindow):
                 base_name = name.split('[')[0].strip()
                 _, color, _ = self.signal_styles.get(name, (None, "#FFFFFF", 2))
                 html_parts.append(f'<span style="color:{color}">{base_name}</span>')
-            html_text = ", ".join(html_parts) if html_parts else axis
-            label.setLabel(text=html_text)
+
+            # Create centered HTML layout with CSS
+            if html_parts:
+                html_text = f'<div style="text-align: center; width: 100%;">{", ".join(html_parts)}</div>'
+            else:
+                html_text = f'<div style="text-align: center; width: 100%;">{axis}</div>'
+
+            label.setLabel(text=html_text, html=True)  # Set html=True to ensure HTML is processed
 
     # Replace the current static method with an instance method
     def pick_color(self, btn):
@@ -624,6 +650,20 @@ class SignalViewer(QMainWindow):
         except Exception:
             s_a, s_b = "-", "-"
 
+        try:
+            date_a = datetime.datetime.fromtimestamp(t_a) if has_a else None
+            date_b = datetime.datetime.fromtimestamp(t_b) if has_b else None
+            # Use the earlier date if both are valid, otherwise use whichever is available
+            if date_a and date_b:
+                date = min(date_a, date_b)
+            elif date_a:
+                date = date_a
+            elif date_b:
+                date = date_b
+            date_str = date.strftime("%d-%b-%Y") if date else "Unknown"
+        except Exception:
+            date_str = "Unknown"
+
         self.log_message(f"Updating cursor info: A={s_a}, B={s_b}", Logger.DEBUG)
 
         def get_vals(t, enabled):
@@ -643,18 +683,18 @@ class SignalViewer(QMainWindow):
         v_a = get_vals(t_a, has_a)
         v_b = get_vals(t_b, has_b)
 
-        self.cursor_info.update_data(s_a, s_b, v_a, v_b, has_a, has_b)
+        self.cursor_info.update_data(s_a, s_b, v_a, v_b, has_a, has_b, date_str)
 
-    def toggle_right_panel(self, visible):
+    def toggle_right_panel(self, checked):
         """
         Show/hide the entire control panel.
 
         Args:
             visible (bool): Whether to show the panel.
         """
-        self.log_message(f"Control panel {'shown' if visible else 'hidden'}", Logger.DEBUG)
-        self.control_panel.setVisible(visible)
-        self.show_panel_btn.setVisible(not visible)
+        self.log_message(f"Control panel {'hidden' if checked else 'shown'}", Logger.DEBUG)
+        self.control_panel.setVisible(not checked)
+        self.show_panel_btn.setVisible(checked)
 
     def toggle_cursor_info_mode(self, docked):
         """
@@ -787,12 +827,12 @@ class SignalViewer(QMainWindow):
             self.scroll_layout.addWidget(row)
             self.log_message(f"Added signal: {name}", Logger.DEBUG)
 
-    def export_graph(self):
+    def export_graph_simple(self):
         self.log_message("Starting graph export...", Logger.INFO)
         try:
             from pyqtgraph.exporters import ImageExporter
             file_path, _ = QFileDialog.getSaveFileName(
-                self, "Export Graph", "graph.png", "PNG Images (*.png);;PDF Files (*.pdf)"
+                self, "Export Graph", "graph.png", "PNG Images (*.png)"
             )
             if file_path:
                 exporter = ImageExporter(self.plot_widget.plotItem)
@@ -804,6 +844,13 @@ class SignalViewer(QMainWindow):
             self.log_message("pyqtgraph.exporters not available. Cannot export graph.", Logger.ERROR)
         except Exception as e:
             self.log_message(f"Graph export failed: {str(e)}", Logger.ERROR)
+
+    def export_graph_via_utils(self):
+        """
+        Wrapper method to call the export_graph function from utils.
+        """
+        self.log_message("Exporting graph via utils...", Logger.INFO)
+        export_graph(self.plot_widget, self)
 
     def open_analysis_dialog(self):
         show_analysis_dialog(self)
