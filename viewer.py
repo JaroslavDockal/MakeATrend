@@ -483,6 +483,7 @@ class SignalViewer(QMainWindow):
                     if is_digital_signal(self.data_signals[name]):
                         axis = 'Digital'
                         style = dict(stepMode=True, width=3)
+                        self.viewboxes['Digital'].setYRange(-0.1, 1.1, padding=0.1)
                     else:
                         style = dict(width=width)
 
@@ -500,6 +501,10 @@ class SignalViewer(QMainWindow):
                     self.curves[name] = curve
                     self.signal_axis_map[axis].append(name)
                     self.signal_styles[name] = (axis, color, style['width'])
+
+                    widgets['checkbox'].setStyleSheet(f"color: {color};")
+                    # Force a refresh of the plot
+                    self.plot_widget.plotItem.update()
                 else:
                     self.log_message(f"Hiding signal: {name}", Logger.DEBUG)
                     curve = self.curves.pop(name, None)
@@ -508,6 +513,7 @@ class SignalViewer(QMainWindow):
                         self.viewboxes[axis].removeItem(curve)
                         self.signal_axis_map[axis].remove(name)
                         del self.signal_styles[name]
+                    widgets['checkbox'].setStyleSheet("color: white;")
                 self.update_axis_labels()
                 break
 
