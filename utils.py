@@ -1,5 +1,5 @@
 """
-combined_utils.py
+Utils module
 
 A combined module that provides:
 1. Utilities for parsing CSV and proprietary recorder files
@@ -224,16 +224,16 @@ def parse_recorder_format(text):
                 continue
 
     if not start_time_str:
-        Logger.log_message_static("Missing start time in recorder file", Logger.ERROR)
+        Logger.log_message_static("Missing start time in the file", Logger.ERROR)
         raise ValueError("Invalid recorder format: missing start time.")
     if not interval_sec:
-        Logger.log_message_static("Missing interval in recorder file", Logger.ERROR)
+        Logger.log_message_static("Missing interval in the file", Logger.ERROR)
         raise ValueError("Invalid recorder format: missing interval.")
     if not item_map:
-        Logger.log_message_static("No signal items found in recorder file", Logger.ERROR)
+        Logger.log_message_static("No signal items found in the file", Logger.ERROR)
         raise ValueError("Invalid recorder format: no signal items found.")
     if not data_lines:
-        Logger.log_message_static("No data lines found in recorder file", Logger.ERROR)
+        Logger.log_message_static("No data lines found in the file", Logger.ERROR)
         raise ValueError("Invalid recorder format: no data found.")
 
     try:
@@ -259,7 +259,7 @@ def parse_recorder_format(text):
         signals[name] = np.array(signals[name], dtype=np.float32)
         Logger.log_message_static(f"Created signal '{name}' with {len(signals[name])} points", Logger.DEBUG)
 
-    Logger.log_message_static(f"Successfully parsed {len(signals)} signals from recorder file", Logger.INFO)
+    Logger.log_message_static(f"Successfully parsed {len(signals)} signals from Drive Debug file", Logger.INFO)
     return np.array(timestamps, dtype=np.float64), signals
 
 def find_nearest_index(array, value):

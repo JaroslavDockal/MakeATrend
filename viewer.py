@@ -51,19 +51,24 @@ class LogWindow(QDialog):
         self.layout.addWidget(self.log_view)
 
         # Layout for checkboxes
-        checkbox_layout = QHBoxLayout()
+        control_layout = QHBoxLayout()
 
         self.debug_checkbox = QCheckBox("Show Debug", self)
-        self.debug_checkbox.setChecked(False)
+        self.debug_checkbox.setChecked(True)
         self.debug_checkbox.setToolTip("Show detailed debug messages")
-        checkbox_layout.addWidget(self.debug_checkbox)
+        control_layout.addWidget(self.debug_checkbox)
 
         self.autoscroll_checkbox = QCheckBox("Autoscroll", self)
         self.autoscroll_checkbox.setChecked(True)
         self.autoscroll_checkbox.setToolTip("Automatically scroll to newest messages")
-        checkbox_layout.addWidget(self.autoscroll_checkbox)
+        control_layout.addWidget(self.autoscroll_checkbox)
 
-        self.layout.addLayout(checkbox_layout)
+        clear_button = QPushButton("Clear", self)
+        clear_button.setToolTip("Clear all log messages")
+        clear_button.clicked.connect(self.clear_log)
+        control_layout.addWidget(clear_button)
+
+        self.layout.addLayout(control_layout)
 
     def add_message(self, message, level=INFO):
         """
@@ -92,6 +97,13 @@ class LogWindow(QDialog):
         if self.autoscroll_checkbox.isChecked():
             scrollbar = self.log_view.verticalScrollBar()
             scrollbar.setValue(scrollbar.maximum())
+
+    def clear_log(self):
+        """
+        Clears all log messages from the log view.
+        """
+        self.log_view.clear()
+
 
 class SignalViewer(QMainWindow):
     """
@@ -266,7 +278,8 @@ class SignalViewer(QMainWindow):
         left_column.addWidget(self.toggle_mode_btn)
 
         self.toggle_panel_btn = QPushButton("Hide Panel")
-        self.toggle_panel_btn.clicked.connect(self.toggle_right_panel)
+        self.toggle_mode_btn.setCheckable(True)
+        self.toggle_panel_btn.toggled.connect(self.toggle_right_panel)
         self.toggle_panel_btn.setToolTip("Hide the control panel")
         left_column.addWidget(self.toggle_panel_btn)
 
@@ -431,7 +444,7 @@ class SignalViewer(QMainWindow):
         """
         Removes all signal plots and resets widgets.
         """
-        self.log_message("Clearing all signals from plot", Logger.INFO)
+        self.log_message("Clearing all signals from plot", Logger.DEBUG)
         for curve in self.curves.values():
             for vb in self.viewboxes.values():
                 vb.removeItem(curve)
@@ -738,7 +751,7 @@ class SignalViewer(QMainWindow):
                 QMessageBox.information(self, "Virtual Signal",
                                         f"Virtual signal '{signal_name}' created successfully.")
                 self.log_message(f"Virtual signal '{signal_name}' created successfully with expression: {expression}",
-                                 INFO)
+                                 Logger.INFO)
             except Exception as e:
                 QMessageBox.critical(self, "Virtual Signal Error", str(e))
 
@@ -758,7 +771,7 @@ class SignalViewer(QMainWindow):
             self.log_message("No data was loaded - user cancelled or file error", Logger.WARNING)
             return
         else:
-            self.log_message(f"Successfully loaded {len(signals)} signals", Logger.INFO)
+            self.log_message(f"Successfully loaded {len(signals)} signals", Logger.DEBUG)
 
         self.data_signals = signals
         self.clear_signals()
@@ -787,7 +800,6 @@ class SignalViewer(QMainWindow):
             self.log_message(f"Graph export failed: {str(e)}", Logger.ERROR)
 
     def open_analysis_dialog(self):
-        self.log_message("Opening signal analysis dialog", Logger.INFO)
         show_analysis_dialog(self)
 
     def dragEnterEvent(self, event):

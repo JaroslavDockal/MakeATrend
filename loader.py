@@ -34,7 +34,7 @@ def load_multiple_files(file_paths=None):
         dict[str, tuple[np.ndarray, np.ndarray]]: signal name -> (time, values)
     """
     if file_paths is None:
-        Logger.log_message_static("Opening file dialog to load multiple files.", Logger.INFO)
+        Logger.log_message_static("Opening file dialog to load multiple files.", Logger.DEBUG)
         file_paths, _ = QFileDialog.getOpenFileNames(None, "Open Data Files", "", "Data Files (*.csv *.txt)")
         if not file_paths:
             Logger.log_message_static("No files selected. Operation canceled.", Logger.DEBUG)

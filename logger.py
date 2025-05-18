@@ -50,6 +50,10 @@ class Logger:
         if self.log_window:
             self.log_window.add_message(formatted_message, level)
 
+        # Log to a file
+        with open("application.log", "a") as log_file:
+            log_file.write(formatted_message + "\n")
+
     @staticmethod
     def log_message_static(message, level=INFO):
         """
