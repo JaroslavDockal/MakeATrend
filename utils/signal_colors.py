@@ -2,10 +2,11 @@
 Module with predefined colors for signals.
 Provides a set of optimized colors for distinguishing signals on a dark background.
 """
-
 import hashlib
 import random
-from logger import Logger
+
+from .logger import Logger
+
 
 class SignalColors:
     """

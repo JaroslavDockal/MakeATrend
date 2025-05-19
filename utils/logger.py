@@ -1,4 +1,4 @@
-# logger.py
+import os
 import datetime
 
 class Logger:
@@ -10,14 +10,10 @@ class Logger:
 
     _instance = None
 
-    @classmethod
-    def get_instance(cls):
-        if cls._instance is None:
-            cls._instance = Logger()
-        return cls._instance
-
     def __init__(self):
         self.log_window = None
+        self._log_file_path = None
+        self._setup_log_file()
 
     def set_log_window(self, log_window):
         self.log_window = log_window
@@ -51,8 +47,20 @@ class Logger:
             self.log_window.add_message(formatted_message, level)
 
         # Log to a file
-        with open("application.log", "a") as log_file:
-            log_file.write(formatted_message + "\n")
+        if self._log_file_path:
+            with open(self._log_file_path, "a") as log_file:
+                log_file.write(formatted_message + "\n")
+
+    def _setup_log_file(self):
+        """Create the _logs directory and set up the log file path based on the current date-time."""
+        # Create _logs directory if it doesn't exist
+        logs_dir = "_logs"
+        if not os.path.exists(logs_dir):
+            os.makedirs(logs_dir)
+
+        # Generate filename based on current date and time
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")
+        self._log_file_path = os.path.join(logs_dir, f"Session_{timestamp}.log")
 
     @staticmethod
     def log_message_static(message, level=INFO):
@@ -66,3 +74,9 @@ class Logger:
         """
         instance = Logger.get_instance()
         instance.log_message(message, level)
+
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = Logger()
+        return cls._instance

@@ -1,8 +1,11 @@
 import os
+
 import numpy as np
-from utils import parse_csv_or_recorder
 from PySide6.QtWidgets import QFileDialog, QDialog
-from logger import Logger
+
+from .utils import parse_csv_or_recorder
+from utils.logger import Logger
+
 
 def load_single_file():
     """
@@ -66,30 +69,6 @@ def load_multiple_files(file_paths=None):
 
     Logger.log_message_static(f"Successfully loaded and merged {len(result)} signals from {len(file_paths)} files.", Logger.INFO)
     return result
-
-# Advanced CSV parsing functionality below - currently not used in production
-class ParseOptions:
-    """
-    Stores CSV parsing configuration options.
-
-    Attributes:
-        delimiter (str): Character used to separate fields in the CSV file (default: ',')
-        decimal_separator (str): Character used for decimal points (default: '.')
-        date_format (str): Format for date/time parsing (default: 'auto')
-        has_header (bool): Whether the first row contains headers (default: True)
-        skip_rows (int): Number of rows to skip at the beginning (default: 0)
-        encoding (str): File encoding (default: 'utf-8')
-    """
-
-    def __init__(self):
-        Logger.log_message_static("Initializing CSV ParseOptions with default values", Logger.DEBUG)
-        self.delimiter = ','
-        self.decimal_separator = '.'
-        self.date_format = "auto"  # "auto", "iso", "mdy", "dmy", "ymd", or custom format
-        self.has_header = True
-        self.skip_rows = 0
-        self.encoding = "utf-8"
-
 
 def detect_csv_dialect(file_path, sample_size=4096, encodings=None):
     """
@@ -210,6 +189,52 @@ def detect_csv_dialect(file_path, sample_size=4096, encodings=None):
     Logger.log_message_static(f"CSV dialect detection complete: {result}", Logger.INFO)
     return result
 
+def get_parse_options(parent=None, file_path=None):
+    """
+    Shows dialog for configuring CSV parsing options.
+
+    Args:
+        parent: Parent widget for the dialog
+        file_path: Path to CSV file for auto-detection
+
+    Returns:
+        ParseOptions: Object with parsing options if OK clicked, None if canceled
+    """
+    Logger.log_message_static(f"Opening CSV parsing options dialog", Logger.INFO)
+    if file_path:
+        Logger.log_message_static(f"Using file for auto-detection: {os.path.basename(file_path)}", Logger.DEBUG)
+
+    dialog = ParseOptionsDialog(parent, file_path)
+    result = dialog.exec()
+
+    if result == QDialog.Accepted:
+        Logger.log_message_static("User accepted CSV parsing options", Logger.DEBUG)
+        return dialog.get_options()
+    else:
+        Logger.log_message_static("User canceled CSV parsing options dialog", Logger.DEBUG)
+        return None
+
+class ParseOptions:
+    """
+    Stores CSV parsing configuration options.
+
+    Attributes:
+        delimiter (str): Character used to separate fields in the CSV file (default: ',')
+        decimal_separator (str): Character used for decimal points (default: '.')
+        date_format (str): Format for date/time parsing (default: 'auto')
+        has_header (bool): Whether the first row contains headers (default: True)
+        skip_rows (int): Number of rows to skip at the beginning (default: 0)
+        encoding (str): File encoding (default: 'utf-8')
+    """
+
+    def __init__(self):
+        Logger.log_message_static("Initializing CSV ParseOptions with default values", Logger.DEBUG)
+        self.delimiter = ','
+        self.decimal_separator = '.'
+        self.date_format = "auto"  # "auto", "iso", "mdy", "dmy", "ymd", or custom format
+        self.has_header = True
+        self.skip_rows = 0
+        self.encoding = "utf-8"
 
 class ParseOptionsDialog(QDialog):
     """
@@ -227,8 +252,7 @@ class ParseOptionsDialog(QDialog):
 
     def __init__(self, parent=None, file_path=None):
         from PySide6.QtWidgets import QVBoxLayout, QFormLayout, QPushButton, QComboBox, QCheckBox, QLineEdit, \
-            QDialogButtonBox, QDialog
-        from PySide6.QtCore import Qt
+            QDialogButtonBox
 
         Logger.log_message_static("Initializing CSV Parse Options Dialog", Logger.DEBUG)
         super().__init__(parent)
@@ -383,29 +407,3 @@ class ParseOptionsDialog(QDialog):
             Logger.DEBUG
         )
         return options
-
-
-def get_parse_options(parent=None, file_path=None):
-    """
-    Shows dialog for configuring CSV parsing options.
-
-    Args:
-        parent: Parent widget for the dialog
-        file_path: Path to CSV file for auto-detection
-
-    Returns:
-        ParseOptions: Object with parsing options if OK clicked, None if canceled
-    """
-    Logger.log_message_static(f"Opening CSV parsing options dialog", Logger.INFO)
-    if file_path:
-        Logger.log_message_static(f"Using file for auto-detection: {os.path.basename(file_path)}", Logger.DEBUG)
-
-    dialog = ParseOptionsDialog(parent, file_path)
-    result = dialog.exec()
-
-    if result == QDialog.Accepted:
-        Logger.log_message_static("User accepted CSV parsing options", Logger.DEBUG)
-        return dialog.get_options()
-    else:
-        Logger.log_message_static("User canceled CSV parsing options dialog", Logger.DEBUG)
-        return None

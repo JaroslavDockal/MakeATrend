@@ -2,31 +2,31 @@
 Main GUI implementation of the CSV Signal Viewer with custom color support.
 """
 import os
-
-import pyqtgraph as pg
-import numpy as np
 import datetime
-from pyqtgraph import setConfigOption
 
+import numpy as np
+import pyqtgraph as pg
+from pyqtgraph import setConfigOption, DateAxisItem
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QCheckBox, QScrollArea, QSplitter, QStatusBar,
     QComboBox, QColorDialog, QSpinBox, QLineEdit, QDialog,
     QFileDialog, QGraphicsProxyWidget, QMessageBox, QTextEdit
 )
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
-from pyqtgraph import DateAxisItem
 
-from utils import find_nearest_index, is_digital_signal, export_graph
-from cursor_info import CursorInfoDialog
-from crosshair import Crosshair
-from custom_viewbox import CustomViewBox
-from virtual_signal_dialog import VirtualSignalDialog
-from loader import load_multiple_files, load_single_file
-from signal_colors import SignalColors
-from signal_analysis import show_analysis_dialog
-from logger import Logger
+from data.utils import find_nearest_index, is_digital_signal, export_graph
+from data.loader import load_multiple_files, load_single_file
+from .widgets.cursor_info import CursorInfoDialog
+from .widgets.crosshair import Crosshair
+from .widgets.virtual_signal_dialog import VirtualSignalDialog
+from utils.custom_viewbox import CustomViewBox
+from utils.signal_colors import SignalColors
+from utils.logger import Logger
+from analysis.analysis_dialog import show_analysis_dialog
+
 
 class LogWindow(QDialog):
     """
@@ -138,7 +138,7 @@ class SignalViewer(QMainWindow):
         setConfigOption('useOpenGL', False)
         setConfigOption('enableExperimental', False)
 
-        icon_path = os.path.join(os.path.dirname(__file__), "assets", "line-graph.ico")
+        icon_path = os.path.join(os.path.dirname(__file__), "_assets", "line-graph.ico")
         self.setWindowIcon(QIcon(icon_path))
 
         self.setWindowTitle("CSV Signal Viewer")
@@ -293,7 +293,7 @@ class SignalViewer(QMainWindow):
         right_column.addWidget(export_btn)
 
         analysis_btn = QPushButton("Signal Analysis")
-        analysis_btn.clicked.connect(self.open_analysis_dialog)
+        analysis_btn.clicked.connect(lambda: show_analysis_dialog(self))
         analysis_btn.setToolTip("Open signal analysis tools (FFT, statistics, etc.)")
         right_column.addWidget(analysis_btn)
 
@@ -560,7 +560,6 @@ class SignalViewer(QMainWindow):
 
             label.setLabel(text=html_text, html=True)  # Set html=True to ensure HTML is processed
 
-    # Replace the current static method with an instance method
     def pick_color(self, btn):
         """
         Opens color dialog to select line color.
@@ -745,7 +744,6 @@ class SignalViewer(QMainWindow):
         Args:
             text (str): Filter string (case-insensitive).
         """
-        self.log_message(f"Filtering signals with text: '{text}'", Logger.DEBUG)
         self.signal_filter_text = text.lower().strip()
         for name, widgets in self.signal_widgets.items():
             row_widget = widgets.get('row')
@@ -777,7 +775,7 @@ class SignalViewer(QMainWindow):
 
             try:
                 # Use the dedicated compute_virtual_signal function from virtual_signal_dialog
-                from virtual_signal_dialog import compute_virtual_signal
+                from ui.widgets.virtual_signal_dialog import compute_virtual_signal
 
                 # Compute the virtual signal
                 self.log_message(f"Computing virtual signal '{signal_name}' with expression: {expression}", Logger.DEBUG)
@@ -849,7 +847,7 @@ class SignalViewer(QMainWindow):
         """
         Wrapper method to call the export_graph function from utils.
         """
-        self.log_message("Exporting graph via utils...", Logger.INFO)
+        self.log_message("Exporting graph via utils...", Logger.DEBUG)
         export_graph(self.plot_widget, self)
 
     def open_analysis_dialog(self):

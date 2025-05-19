@@ -1,5 +1,3 @@
-# custom_viewbox.py
-
 import pyqtgraph as pg
 
 class CustomViewBox(pg.ViewBox):

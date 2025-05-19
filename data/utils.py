@@ -9,20 +9,19 @@ Optional dependencies:
 - PySide6.QtPrintSupport: Required for PDF export
 - PySide6.QtSvg: Required for SVG export
 """
-
 import os
 import re
+import json
+from datetime import datetime, timedelta
+
 import pandas as pd
 import numpy as np
-import json
-from logger import Logger
-
-from datetime import datetime, timedelta
 from PySide6.QtWidgets import QMessageBox, QFileDialog
 from PySide6.QtCore import QSize, QRect
 from PySide6.QtGui import QPixmap, QPainter
 
-# ===== CSV AND DATA PARSING FUNCTIONS =====
+from utils.logger import Logger
+
 
 def parse_csv_or_recorder(path: str):
     """
@@ -60,7 +59,6 @@ def parse_csv_or_recorder(path: str):
     else:
         Logger.log_message_static(f"Treating file as standard CSV: {os.path.basename(path)}", Logger.INFO)
         return parse_csv_file(path)
-
 
 def parse_csv_file(path):
     """
@@ -171,7 +169,6 @@ def parse_csv_file(path):
 
     Logger.log_message_static(f"Successfully parsed {len(signals)} signals from CSV file", Logger.INFO)
     return timestamps, signals
-
 
 def parse_recorder_format(text):
     """
@@ -288,7 +285,6 @@ def find_nearest_index(array, value):
         Logger.log_message_static(f"Error finding nearest index: {str(e)}", Logger.ERROR)
         return None
 
-
 def is_digital_signal(arr):
     """
     Determines whether a signal is digital (boolean-like).
@@ -332,7 +328,7 @@ def is_digital_signal(arr):
             Logger.log_message_static("Signal has object dtype, checking for TRUE/FALSE values", Logger.DEBUG)
             unique_vals = set(str(val).upper() for val in arr if val is not None)
             if unique_vals.issubset({'TRUE', 'FALSE'}):
-                Logger.log_message_static(f"Signal classified as digital with values: {unique_vals}", Logger.INFO)
+                Logger.log_message_static(f"Signal classified as digital with values: {unique_vals}", Logger.DEBUG)
                 return True
             else:
                 Logger.log_message_static(f"Signal contains non-boolean values: {unique_vals}", Logger.DEBUG)
@@ -352,8 +348,6 @@ def is_digital_signal(arr):
     except Exception as e:
         Logger.log_message_static(f"Error determining if signal is digital: {str(e)}", Logger.ERROR)
         return False
-
-# ===== GRAPH EXPORT FUNCTIONS =====
 
 def export_graph(plot_widget, parent_widget=None, export_full_window=False):
     """
@@ -416,7 +410,7 @@ def export_graph(plot_widget, parent_widget=None, export_full_window=False):
                 export_height = MIN_HEIGHT
                 export_width = int(MIN_HEIGHT * aspect_ratio)
 
-        Logger.log_message_static(f"Export dimensions set to {export_width}x{export_height} pixels", Logger.INFO)
+        Logger.log_message_static(f"Export dimensions set to {export_width}x{export_height} pixels", Logger.DEBUG)
 
         # Offer file selection
         file_filters = "PNG images (*.png);;PDF documents (*.pdf);;SVG vector format (*.svg)"
@@ -451,7 +445,7 @@ def export_graph(plot_widget, parent_widget=None, export_full_window=False):
             if not file_path.lower().endswith('.png'):
                 file_path += '.png'
 
-        Logger.log_message_static(f"Exporting graph as {export_format.upper()} to {file_path}", Logger.INFO)
+        Logger.log_message_static(f"Exporting graph as {export_format.upper()} to {file_path}", Logger.DEBUG)
 
         # Use PyQtGraph's exporter for PNG/SVG to ensure we get the entire view
         if export_format in ['png', 'svg']:
@@ -672,7 +666,6 @@ def export_graph_fallback(plot_widget, parent_widget=None):
     except Exception as e:
         Logger.log_message_static(f"Error in fallback export: {str(e)}", Logger.ERROR)
         return False
-
 
 def save_project_state(file_path, state):
     """

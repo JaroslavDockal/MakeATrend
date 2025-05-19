@@ -2,11 +2,14 @@
 Crosshair overlay for the signal plot.
 Displays interactive vertical and horizontal lines with labels at mouse position.
 """
+from datetime import datetime
+
+from PySide6.QtCore import Qt, QTimer
 
 import pyqtgraph as pg
-from PySide6.QtCore import Qt, QTimer
-from datetime import datetime
-from logger import Logger
+
+from utils.logger import Logger
+
 
 class Crosshair:
     """

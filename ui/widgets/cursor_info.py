@@ -5,17 +5,18 @@ Dialog window for displaying cursor values from a plotted CSV signal.
 Shows values at two cursors (A and B), their difference (Δ), and delta per second (Δ/s).
 Always shows units if available (except [-] = no unit).
 """
+import csv
+import datetime
+import re
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QTableWidget,
     QTableWidgetItem, QPushButton, QHeaderView, QFileDialog
 )
-from PySide6.QtCore import Qt
-import datetime
-import csv
-import re
 
-from logger import Logger
+from utils.logger import Logger
+
 
 class CursorInfoDialog(QDialog):
     """
@@ -24,9 +25,10 @@ class CursorInfoDialog(QDialog):
     Boolean signals are displayed as "On"/"Off", and Δ/Δs are hidden for them.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, viewer=None):
         Logger.log_message_static("Initializing CursorInfoDialog", Logger.DEBUG)
         super().__init__(parent)
+        self.viewer = viewer or parent  # Use parent as fallback if viewer not provided
         self.setWindowTitle("Cursor Information")
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
         self.resize(700, 400)
@@ -79,42 +81,6 @@ class CursorInfoDialog(QDialog):
         self._rebuild_table()
         Logger.log_message_static("Table rebuilt with new number format", Logger.DEBUG)
 
-    @staticmethod
-    def extract_unit(signal_name: str) -> str:
-        """
-        Extracts unit from a signal name using brackets (e.g., "Temp [°C]").
-        Returns an empty string if unit is '-' or missing.
-
-        Args:
-            signal_name (str): Full signal name.
-
-        Returns:
-            str: Extracted unit or empty string.
-        """
-        match = re.search(r"\[(.*?)\]", signal_name)
-        if match:
-            unit = match.group(1).strip()
-            Logger.log_message_static(f"Extracted unit '{unit}' from signal '{signal_name}'", Logger.DEBUG)
-            return "" if unit == "-" else unit
-
-        Logger.log_message_static(f"No unit found in signal name '{signal_name}'", Logger.DEBUG)
-        return ""
-
-    @staticmethod
-    def clean_signal_name(signal_name: str) -> str:
-        """
-        Removes unit part from signal name for clean display.
-
-        Args:
-            signal_name (str): Full signal name.
-
-        Returns:
-            str: Signal name without unit.
-        """
-        cleaned = re.sub(r"\s*\[.*?\]", "", signal_name)
-        Logger.log_message_static(f"Cleaned signal name from '{signal_name}' to '{cleaned}'", Logger.DEBUG)
-        return cleaned
-
     def update_data(self, time_a: str, time_b: str, values_a: dict, values_b: dict, has_a: bool, has_b: bool, date: str):
         """
         Update the table with new cursor values.
@@ -127,7 +93,7 @@ class CursorInfoDialog(QDialog):
             has_a (bool): Whether cursor A is active.
             has_b (bool): Whether cursor B is active.
         """
-        Logger.log_message_static(f"Updating cursor data: A={'active' if has_a else 'inactive'}, B={'active' if has_b else 'inactive'}", Logger.INFO)
+        Logger.log_message_static(f"Updating cursor data: A={'active' if has_a else 'inactive'}, B={'active' if has_b else 'inactive'}", Logger.DEBUG)
         Logger.log_message_static(f"Cursor A time: {time_a}, Cursor B time: {time_b}", Logger.DEBUG)
         Logger.log_message_static(f"Values A contains {len(values_a)} signals, Values B contains {len(values_b)} signals", Logger.DEBUG)
 
@@ -201,6 +167,36 @@ class CursorInfoDialog(QDialog):
         Logger.log_message_static(f"Processed {len(self._current_table_data)} signals for cursor info display", Logger.DEBUG)
         self._rebuild_table()
 
+    def export_to_csv(self):
+        """
+        Opens a save dialog and writes the current cursor values to CSV.
+        """
+        Logger.log_message_static("Opening file dialog for CSV export", Logger.INFO)
+        fname, _ = QFileDialog.getSaveFileName(self, "Save CSV", "cursor_values.csv", "CSV files (*.csv)")
+
+        if fname:
+            Logger.log_message_static(f"Exporting to CSV file: {fname}", Logger.INFO)
+            try:
+                with open(fname, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    headers = ["Signal Name", "Value A", "Value B", "Delta", "Delta/s"]
+                    writer.writerow(headers)
+
+                    for row in self._export_data[1:]:
+                        writer.writerow(row)
+                Logger.log_message_static(f"Successfully exported {len(self._export_data)} rows to CSV", Logger.INFO)
+            except Exception as e:
+                Logger.log_message_static(f"Error exporting to CSV: {str(e)}", Logger.ERROR)
+        else:
+            Logger.log_message_static("CSV export canceled by user", Logger.DEBUG)
+
+    def showEvent(self, event):
+        """
+        Ensures dialog window doesn't reset position on show.
+        """
+        Logger.log_message_static("Showing cursor info dialog", Logger.DEBUG)
+        self.move(self.pos())
+        super().showEvent(event)
 
     def _is_boolean(self, signal_name: str) -> bool:
         """
@@ -212,7 +208,19 @@ class CursorInfoDialog(QDialog):
         Returns:
             bool: True if the signal is on the Digital axis, False otherwise.
         """
-        return signal_name in self.parent().signal_axis_map.get('Digital', [])
+        # First try using the stored viewer reference
+        if hasattr(self.viewer, 'signal_axis_map'):
+            return signal_name in self.viewer.signal_axis_map.get('Digital', [])
+
+        # Fallback to parent() for backward compatibility
+        parent = self.parent()
+        if parent and hasattr(parent, 'signal_axis_map'):
+            return signal_name in parent.signal_axis_map.get('Digital', [])
+
+        # If we can't find signal_axis_map anywhere, assume it's not a boolean
+        Logger.log_message_static(f"Cannot determine if {signal_name} is boolean: missing signal_axis_map",
+                                  Logger.WARNING)
+        return False
 
     def _format_val(self, val, unit="", is_bool=False):
         """
@@ -303,28 +311,41 @@ class CursorInfoDialog(QDialog):
 
         Logger.log_message_static("Table rebuild complete", Logger.DEBUG)
 
-    def export_to_csv(self):
+    @staticmethod
+    def extract_unit(signal_name: str) -> str:
         """
-        Opens a save dialog and writes the current cursor values to CSV.
+        Extracts unit from a signal name using brackets (e.g., "Temp [°C]").
+        Returns an empty string if unit is '-' or missing.
+
+        Args:
+            signal_name (str): Full signal name.
+
+        Returns:
+            str: Extracted unit or empty string.
         """
-        Logger.log_message_static("Opening file dialog for CSV export", Logger.INFO)
-        fname, _ = QFileDialog.getSaveFileName(self, "Save CSV", "cursor_values.csv", "CSV files (*.csv)")
+        match = re.search(r"\[(.*?)\]", signal_name)
+        if match:
+            unit = match.group(1).strip()
+            Logger.log_message_static(f"Extracted unit '{unit}' from signal '{signal_name}'", Logger.DEBUG)
+            return "" if unit == "-" else unit
 
-        if fname:
-            Logger.log_message_static(f"Exporting to CSV file: {fname}", Logger.INFO)
-            try:
-                with open(fname, 'w', newline='', encoding='utf-8') as f:
-                    writer = csv.writer(f)
-                    headers = ["Signal Name", "Value A", "Value B", "Delta", "Delta/s"]
-                    writer.writerow(headers)
+        Logger.log_message_static(f"No unit found in signal name '{signal_name}'", Logger.DEBUG)
+        return ""
 
-                    for row in self._export_data[1:]:
-                        writer.writerow(row)
-                Logger.log_message_static(f"Successfully exported {len(self._export_data)} rows to CSV", Logger.INFO)
-            except Exception as e:
-                Logger.log_message_static(f"Error exporting to CSV: {str(e)}", Logger.ERROR)
-        else:
-            Logger.log_message_static("CSV export canceled by user", Logger.DEBUG)
+    @staticmethod
+    def clean_signal_name(signal_name: str) -> str:
+        """
+        Removes unit part from signal name for clean display.
+
+        Args:
+            signal_name (str): Full signal name.
+
+        Returns:
+            str: Signal name without unit.
+        """
+        cleaned = re.sub(r"\s*\[.*?\]", "", signal_name)
+        Logger.log_message_static(f"Cleaned signal name from '{signal_name}' to '{cleaned}'", Logger.DEBUG)
+        return cleaned
 
     @staticmethod
     def calc_time_delta(t1_str: str, t2_str: str) -> str:
@@ -354,14 +375,6 @@ class CursorInfoDialog(QDialog):
         except Exception as e:
             Logger.log_message_static(f"Error calculating time delta: {str(e)}", Logger.WARNING)
             return "-"
-
-    def showEvent(self, event):
-        """
-        Ensures dialog window doesn't reset position on show.
-        """
-        Logger.log_message_static("Showing cursor info dialog", Logger.DEBUG)
-        self.move(self.pos())
-        super().showEvent(event)
 
     @staticmethod
     def _calc_delta_seconds(t1_str, t2_str) -> float:
