@@ -4,8 +4,8 @@ Entry point for the CSV Signal Viewer application.
 import os
 import sys
 
-from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QApplication
 
 from ui.viewer import SignalViewer
 

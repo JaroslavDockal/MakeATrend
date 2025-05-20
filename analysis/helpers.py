@@ -286,6 +286,11 @@ def extended_prepare_signal(values, dialog, title="Signal Analysis"):
         negative_ratio = negative_count / positive_count
         Logger.log_message_static(f"Negative-to-positive ratio: {negative_ratio:.4f}", Logger.DEBUG)
 
+    # Skip dialog if the signal is entirely positive
+    if negative_count == 0:
+        Logger.log_message_static("Signal is entirely positive. No further processing required.", Logger.DEBUG)
+        return values
+
     # Handle negligible negative values (< 5% compared to positives)
     if negative_ratio < 0.05 and negative_count > 0:
         Logger.log_message_static(

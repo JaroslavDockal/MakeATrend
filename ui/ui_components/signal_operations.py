@@ -3,7 +3,7 @@ Signal operations including virtual signals and graph export for the CSV Signal 
 """
 from PySide6.QtWidgets import QMessageBox, QFileDialog
 
-from data.export_utils import export_graph
+from data.graph_export import export_graph
 from analysis.analysis_dialog import show_analysis_dialog
 
 

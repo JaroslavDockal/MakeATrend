@@ -29,7 +29,7 @@ class LogWindow(QDialog):
         control_layout = QHBoxLayout()
 
         self.debug_checkbox = QCheckBox("Show Debug", self)
-        self.debug_checkbox.setChecked(True)
+        self.debug_checkbox.setChecked(False)
         self.debug_checkbox.setToolTip("Show detailed debug messages")
         control_layout.addWidget(self.debug_checkbox)
 
@@ -45,10 +45,25 @@ class LogWindow(QDialog):
 
         self.layout.addLayout(control_layout)
 
+        self.message_buffer = []
+
     def add_message(self, message, level=INFO):
         """
-        Add a message to the log view.
+        Add a message to the log view or buffer if the window is not visible.
 
+        Args:
+            message (str): The message to add.
+            level (int): Message level (DEBUG=0, INFO=1, WARNING=2, ERROR=3)
+        """
+        if not self.isVisible():
+            self.message_buffer.append((message, level))
+            return
+
+        self._display_message(message, level)
+
+    def _display_message(self, message, level):
+        """
+        Display a message in the log view with appropriate styling.
         Args:
             message (str): The message to add.
             level (int): Message level (DEBUG=0, INFO=1, WARNING=2, ERROR=3)
@@ -78,3 +93,12 @@ class LogWindow(QDialog):
         Clears all log messages from the log view.
         """
         self.log_view.clear()
+
+    def showEvent(self, event):
+        """
+        Handle the event when the window is shown.
+        """
+        super().showEvent(event)
+        for message, level in self.message_buffer:
+            self._display_message(message, level)
+        self.message_buffer.clear()
