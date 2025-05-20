@@ -15,7 +15,7 @@ class CustomViewBox(pg.ViewBox):
         if not self.crosshair_locked:
             super().wheelEvent(ev)
 
-    def setCrosshairLock(self, locked: bool):
+    def set_crosshair_lock(self, locked: bool):
         """
         Lock or unlock zooming via mouse wheel.
 

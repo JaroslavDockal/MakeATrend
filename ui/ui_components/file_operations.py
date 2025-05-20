@@ -3,8 +3,6 @@ File loading and drag-drop operations for the CSV Signal Viewer.
 """
 import os
 
-from PySide6.QtCore import Qt
-
 from data.loader import load_multiple_files, load_single_file
 
 
@@ -34,7 +32,7 @@ def load_data(self, multiple=False):
         self.scroll_layout.addWidget(row)
         self.log_message(f"Added signal: {name}", self.DEBUG)
 
-def dragEnterEvent(self, event):
+def drag_enter_event(self, event):
     """
     Accept drag events if they contain files.
     """
@@ -45,7 +43,7 @@ def dragEnterEvent(self, event):
     else:
         event.ignore()
 
-def dropEvent(self, event):
+def drop_event(self, event):
     """
     Handle file drop events and load the dropped files.
     """

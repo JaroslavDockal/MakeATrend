@@ -214,7 +214,7 @@ def parse_recorder_format(text):
                 idx = int(parts[0])
                 values = [float(p.replace(',', '.')) for p in parts[1:]]
                 data_lines.append([idx] + values)
-            except ValueError as e:
+            except ValueError:
                 Logger.log_message_static(f"Skipping invalid data line: {line}", Logger.WARNING)
                 continue
 

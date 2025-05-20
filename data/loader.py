@@ -22,17 +22,11 @@ Functions:
 """
 
 import os
-import json
 import numpy as np
-import pandas as pd
-from datetime import datetime
 
-from PySide6.QtWidgets import QFileDialog, QDialog, QMessageBox
+from PySide6.QtWidgets import QFileDialog
 
 from .parser import parse_csv_or_recorder
-from .signal_utils import is_digital_signal, find_nearest_index
-from .csv_dialect import ParseOptions, ParseOptionsDialog, detect_csv_dialect
-from .project import save_project_state, load_project_state
 from utils.logger import Logger
 
 

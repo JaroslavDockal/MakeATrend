@@ -92,6 +92,7 @@ class CursorInfoDialog(QDialog):
             values_b (dict): Signal values at cursor B.
             has_a (bool): Whether cursor A is active.
             has_b (bool): Whether cursor B is active.
+            date (str): Date of the measurement being analyzed.
         """
         Logger.log_message_static(f"Updating cursor data: A={'active' if has_a else 'inactive'}, B={'active' if has_b else 'inactive'}", Logger.DEBUG)
         Logger.log_message_static(f"Cursor A time: {time_a}, Cursor B time: {time_b}", Logger.DEBUG)
@@ -377,7 +378,7 @@ class CursorInfoDialog(QDialog):
             return "-"
 
     @staticmethod
-    def _calc_delta_seconds(t1_str, t2_str) -> float:
+    def _calc_delta_seconds(t1_str, t2_str) -> float | None:
         """
         Calculates the absolute time difference between two timestamps in seconds.
 

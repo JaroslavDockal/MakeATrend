@@ -129,7 +129,7 @@ class SignalViewer(QMainWindow):
 
     # Import methods from other modules to maintain API compatibility
     from .ui_components.file_operations import (
-        load_data, load_dropped_files, dragEnterEvent, dropEvent
+        load_data, load_dropped_files, drag_enter_event, drop_event
     )
 
     from .ui_components.plot_operations import (

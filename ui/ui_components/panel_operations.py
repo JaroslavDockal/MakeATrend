@@ -9,10 +9,14 @@ from data.signal_utils import find_nearest_index
 
 def toggle_complex_mode(self, state):
     """
-    Enables or disables advanced plotting controls.
+    Toggles between simple and complex display modes.
+
+    In complex mode, advanced plotting controls including axis settings,
+    color selection, and line width options are displayed for each signal.
+    In simple mode, only essential controls are shown for a cleaner interface.
 
     Args:
-        state (bool): True to enable advanced options.
+        state (bool): True to enable complex mode, False for simple mode.
     """
     self.log_message(f"Advanced mode {'enabled' if state else 'disabled'}", self.INFO)
     self.complex_mode = state
@@ -24,10 +28,13 @@ def toggle_complex_mode(self, state):
 
 def toggle_right_panel(self, checked):
     """
-    Show/hide the entire control panel.
+    Shows or hides the control panel on the right side of the application.
+
+    The control panel contains signal controls, cursor options, and visualization
+    settings. When hidden, a button appears to restore the panel.
 
     Args:
-        visible (bool): Whether to show the panel.
+        checked (bool): True to hide the panel, False to show it.
     """
     self.log_message(f"Control panel {'hidden' if checked else 'shown'}", self.DEBUG)
     self.control_panel.setVisible(not checked)
@@ -87,6 +94,7 @@ def toggle_cursor(self, cursor, state):
         cursor (pg.InfiniteLine): The cursor line.
         state (bool): Visibility flag.
     """
+    cursor_name = 'A' if cursor == self.cursor_a else 'B'
     self.log_message(f"{'Showing' if state else 'Hiding'} cursor {'A' if cursor == self.cursor_a else 'B'}", self.DEBUG)
     cursor.setVisible(state)
     if state:
@@ -98,8 +106,16 @@ def toggle_cursor(self, cursor, state):
                     break
             if mid is not None:
                 cursor.setPos(mid)
-        except Exception:
-            pass
+            else:
+                self.log_message(f"Could not position cursor {cursor_name}: No valid time data found", self.WARNING)
+
+        except KeyError as e:
+            self.log_message(f"Error accessing data signal: {str(e)}", self.ERROR)
+        except IndexError as e:
+            self.log_message(f"Index error while positioning cursor {cursor_name}: {str(e)}", self.ERROR)
+        except TypeError as e:
+            self.log_message(f"Type error while positioning cursor {cursor_name}: {str(e)}", self.ERROR)
+
     self.cursor_info.setVisible(self.cursor_a.isVisible() or self.cursor_b.isVisible())
     self.update_cursor_info()
 
@@ -128,6 +144,7 @@ def update_cursor_info(self):
     try:
         date_a = datetime.datetime.fromtimestamp(t_a) if has_a else None
         date_b = datetime.datetime.fromtimestamp(t_b) if has_b else None
+        date = None
         # Use the earlier date if both are valid, otherwise use whichever is available
         if date_a and date_b:
             date = min(date_a, date_b)
