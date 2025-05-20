@@ -17,7 +17,7 @@ from .ui_components.plot_area import setup_plot_area, setup_axes
 from utils.custom_viewbox import CustomViewBox
 from utils.logger import Logger
 from .ui_components.log_window import LogWindow
-
+from utils.signal_colors import SignalColors
 
 class SignalViewer(QMainWindow):
     """
@@ -49,6 +49,7 @@ class SignalViewer(QMainWindow):
 
         SignalViewer.instance = self
         self.logger = Logger.get_instance()
+        SignalColors.initialize()
 
         setConfigOption('useOpenGL', False)
         setConfigOption('enableExperimental', False)
