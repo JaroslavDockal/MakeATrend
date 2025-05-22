@@ -47,12 +47,12 @@ def detect_csv_dialect(file_path, sample_size=4096, encodings=None):
     Raises:
         ValueError: If file cannot be decoded with any of the provided encodings
     """
-    Logger.log_message_static(f"Starting CSV dialect detection for file: {os.path.basename(file_path)}", Logger.DEBUG)
+    Logger.log_message_static(f"Data-Dialect: Starting CSV dialect detection for file: {os.path.basename(file_path)}", Logger.DEBUG)
 
     if encodings is None:
         encodings = ['utf-8', 'latin1', 'ascii', 'utf-16', 'cp1252']
 
-    Logger.log_message_static(f"Trying {len(encodings)} encodings for CSV detection", Logger.DEBUG)
+    Logger.log_message_static(f"Data-Dialect: Trying {len(encodings)} encodings for CSV detection", Logger.DEBUG)
 
     # Read sample from file
     sample_data = None
@@ -63,25 +63,25 @@ def detect_csv_dialect(file_path, sample_size=4096, encodings=None):
             with open(file_path, 'r', encoding=encoding) as f:
                 sample_data = f.read(sample_size)
                 detected_encoding = encoding
-                Logger.log_message_static(f"Successfully read file using {encoding} encoding", Logger.DEBUG)
+                Logger.log_message_static(f"Data-Dialect: Successfully read file using {encoding} encoding", Logger.DEBUG)
                 break
         except UnicodeDecodeError:
-            Logger.log_message_static(f"Encoding {encoding} failed for file", Logger.DEBUG)
+            Logger.log_message_static(f"Data-Dialect: Encoding {encoding} failed for file", Logger.DEBUG)
             continue
 
     if sample_data is None:
-        Logger.log_message_static("Could not decode file with any of the provided encodings", Logger.ERROR)
+        Logger.log_message_static("Data-Dialect: Could not decode file with any of the provided encodings", Logger.ERROR)
         raise ValueError("Could not decode file with any of the provided encodings")
 
     # Use csv Sniffer to detect the dialect
     try:
         import csv
-        Logger.log_message_static("Detecting CSV dialect using csv.Sniffer", Logger.DEBUG)
+        Logger.log_message_static("Data-Dialect: Detecting CSV dialect using csv.Sniffer", Logger.DEBUG)
         dialect = csv.Sniffer().sniff(sample_data)
         has_header = csv.Sniffer().has_header(sample_data)
-        Logger.log_message_static(f"Detected delimiter: '{dialect.delimiter}', header: {has_header}", Logger.DEBUG)
+        Logger.log_message_static(f"Data-Dialect: Detected delimiter: '{dialect.delimiter}', header: {has_header}", Logger.DEBUG)
     except Exception as e:
-        Logger.log_message_static(f"CSV dialect detection failed: {str(e)}, using defaults", Logger.WARNING)
+        Logger.log_message_static(f"Data-Dialect: CSV dialect detection failed: {str(e)}, using defaults", Logger.WARNING)
         # Default to common values if detection fails
         return {
             'delimiter': ',',
@@ -94,7 +94,7 @@ def detect_csv_dialect(file_path, sample_size=4096, encodings=None):
     decimal_separator = '.'
     try:
         import io
-        Logger.log_message_static("Analyzing numeric fields to detect decimal separator", Logger.DEBUG)
+        Logger.log_message_static("Data-Dialect: Analyzing numeric fields to detect decimal separator", Logger.DEBUG)
         sample_io = io.StringIO(sample_data)
         reader = csv.reader(sample_io, dialect)
 
@@ -125,7 +125,7 @@ def detect_csv_dialect(file_path, sample_size=4096, encodings=None):
                         if len(parts) == 2 and all(p.replace('-', '').isdigit() or not p for p in parts):
                             decimal_comma_count += 1
             except Exception as e:
-                Logger.log_message_static(f"Error analyzing row: {str(e)}", Logger.DEBUG)
+                Logger.log_message_static(f"Data-Dialect: Error analyzing row: {str(e)}", Logger.DEBUG)
                 pass
 
         if decimal_comma_count > decimal_point_count:
@@ -138,7 +138,7 @@ def detect_csv_dialect(file_path, sample_size=4096, encodings=None):
                 f"Decimal point more frequent ({decimal_point_count}) than decimal comma ({decimal_comma_count})",
                 Logger.DEBUG)
     except Exception as e:
-        Logger.log_message_static(f"Decimal separator detection failed: {str(e)}", Logger.WARNING)
+        Logger.log_message_static(f"Data-Dialect: Decimal separator detection failed: {str(e)}", Logger.WARNING)
         pass
 
     result = {
@@ -148,7 +148,7 @@ def detect_csv_dialect(file_path, sample_size=4096, encodings=None):
         'encoding': detected_encoding
     }
 
-    Logger.log_message_static(f"CSV dialect detection complete: {result}", Logger.INFO)
+    Logger.log_message_static(f"Data-Dialect: CSV dialect detection complete: {result}", Logger.INFO)
     return result
 
 def get_parse_options(parent=None, file_path=None):
@@ -162,18 +162,18 @@ def get_parse_options(parent=None, file_path=None):
     Returns:
         ParseOptions: Object with parsing options if OK clicked, None if canceled
     """
-    Logger.log_message_static(f"Opening CSV parsing options dialog", Logger.INFO)
+    Logger.log_message_static(f"Data-Dialect: Opening CSV parsing options dialog", Logger.INFO)
     if file_path:
-        Logger.log_message_static(f"Using file for auto-detection: {os.path.basename(file_path)}", Logger.DEBUG)
+        Logger.log_message_static(f"Data-Dialect: Using file for auto-detection: {os.path.basename(file_path)}", Logger.DEBUG)
 
     dialog = ParseOptionsDialog(parent, file_path)
     result = dialog.exec()
 
     if result == QDialog.Accepted:
-        Logger.log_message_static("User accepted CSV parsing options", Logger.DEBUG)
+        Logger.log_message_static("Data-Dialect: User accepted CSV parsing options", Logger.DEBUG)
         return dialog.get_options()
     else:
-        Logger.log_message_static("User canceled CSV parsing options dialog", Logger.DEBUG)
+        Logger.log_message_static("Data-Dialect: User canceled CSV parsing options dialog", Logger.DEBUG)
         return None
 
 class ParseOptions:
@@ -190,7 +190,7 @@ class ParseOptions:
     """
 
     def __init__(self):
-        Logger.log_message_static("Initializing CSV ParseOptions with default values", Logger.DEBUG)
+        Logger.log_message_static("Data-Dialect: Initializing CSV ParseOptions with default values", Logger.DEBUG)
         self.delimiter = ','
         self.decimal_separator = '.'
         self.date_format = "auto"  # "auto", "iso", "mdy", "dmy", "ymd", or custom format
@@ -216,17 +216,17 @@ class ParseOptionsDialog(QDialog):
         from PySide6.QtWidgets import QVBoxLayout, QFormLayout, QPushButton, QComboBox, QCheckBox, QLineEdit, \
             QDialogButtonBox
 
-        Logger.log_message_static("Initializing CSV Parse Options Dialog", Logger.DEBUG)
+        Logger.log_message_static("Data-Dialect: Initializing CSV Parse Options Dialog", Logger.DEBUG)
         super().__init__(parent)
         self.setWindowTitle("CSV Parsing Options")
         self.setMinimumWidth(300)
         self.file_path = file_path
 
         if file_path:
-            Logger.log_message_static(f"ParseOptionsDialog initialized with file: {os.path.basename(file_path)}",
+            Logger.log_message_static(f"Data-Dialect: ParseOptionsDialog initialized with file: {os.path.basename(file_path)}",
                                             Logger.DEBUG)
         else:
-            Logger.log_message_static("ParseOptionsDialog initialized without file path", Logger.DEBUG)
+            Logger.log_message_static("Data-Dialect: ParseOptionsDialog initialized without file path", Logger.DEBUG)
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
@@ -279,7 +279,7 @@ class ParseOptionsDialog(QDialog):
 
         # Auto-detect on startup if file_path provided
         if file_path:
-            Logger.log_message_static("Auto-detecting CSV format on dialog initialization", Logger.DEBUG)
+            Logger.log_message_static("Data-Dialect: Auto-detecting CSV format on dialog initialization", Logger.DEBUG)
             self.auto_detect()
 
     def auto_detect(self):
@@ -288,11 +288,11 @@ class ParseOptionsDialog(QDialog):
         If detection fails, keeps default values.
         """
         if not self.file_path:
-            Logger.log_message_static("Cannot auto-detect without file path", Logger.WARNING)
+            Logger.log_message_static("Data-Dialect: Cannot auto-detect without file path", Logger.WARNING)
             return
 
         try:
-            Logger.log_message_static(f"Starting auto-detection for file: {os.path.basename(self.file_path)}",
+            Logger.log_message_static(f"Data-Dialect: Starting auto-detection for file: {os.path.basename(self.file_path)}",
                                             Logger.DEBUG)
             detected = detect_csv_dialect(self.file_path)
 
@@ -301,23 +301,23 @@ class ParseOptionsDialog(QDialog):
             if delimiter == '\t':
                 delimiter = '\\t'  # Show tab character in UI
 
-            Logger.log_message_static(f"Setting detected delimiter: '{delimiter}'", Logger.DEBUG)
+            Logger.log_message_static(f"Data-Dialect: Setting detected delimiter: '{delimiter}'", Logger.DEBUG)
             index = self.delimiter_input.findText(delimiter)
             if index >= 0:
                 self.delimiter_input.setCurrentIndex(index)
             else:
                 self.delimiter_input.setEditText(delimiter)
 
-            Logger.log_message_static(f"Setting detected decimal separator: '{detected['decimal_separator']}'",
+            Logger.log_message_static(f"Data-Dialect: Setting detected decimal separator: '{detected['decimal_separator']}'",
                                             Logger.DEBUG)
             index = self.decimal_input.findText(detected['decimal_separator'])
             if index >= 0:
                 self.decimal_input.setCurrentIndex(index)
 
-            Logger.log_message_static(f"Setting detected header presence: {detected['has_header']}", Logger.DEBUG)
+            Logger.log_message_static(f"Data-Dialect: Setting detected header presence: {detected['has_header']}", Logger.DEBUG)
             self.has_header.setChecked(detected['has_header'])
 
-            Logger.log_message_static(f"Setting detected encoding: '{detected['encoding']}'", Logger.DEBUG)
+            Logger.log_message_static(f"Data-Dialect: Setting detected encoding: '{detected['encoding']}'", Logger.DEBUG)
             index = self.encoding.findText(detected['encoding'])
             if index >= 0:
                 self.encoding.setCurrentIndex(index)
@@ -331,7 +331,7 @@ class ParseOptionsDialog(QDialog):
                 Logger.INFO
             )
         except Exception as e:
-            Logger.log_message_static(f"Auto-detection failed: {str(e)}", Logger.WARNING)
+            Logger.log_message_static(f"Data-Dialect: Auto-detection failed: {str(e)}", Logger.WARNING)
 
     def get_options(self):
         """
@@ -340,14 +340,14 @@ class ParseOptionsDialog(QDialog):
         Returns:
             ParseOptions: Object containing all parsing configuration
         """
-        Logger.log_message_static("Collecting parse options from dialog", Logger.DEBUG)
+        Logger.log_message_static("Data-Dialect: Collecting parse options from dialog", Logger.DEBUG)
         options = ParseOptions()
 
         options.delimiter = self.delimiter_input.currentText()
         # Handle tab character
         if options.delimiter == '\\t':
             options.delimiter = '\t'
-            Logger.log_message_static("Converted '\\t' to tab character for delimiter", Logger.DEBUG)
+            Logger.log_message_static("Data-Dialect: Converted '\\t' to tab character for delimiter", Logger.DEBUG)
 
         options.decimal_separator = self.decimal_input.currentText()
         options.date_format = self.date_format.currentText()
@@ -356,7 +356,7 @@ class ParseOptionsDialog(QDialog):
         try:
             options.skip_rows = int(self.skip_rows.text())
         except ValueError:
-            Logger.log_message_static(f"Invalid skip rows value: '{self.skip_rows.text()}', using 0", Logger.WARNING)
+            Logger.log_message_static(f"Data-Dialect: Invalid skip rows value: '{self.skip_rows.text()}', using 0", Logger.WARNING)
             options.skip_rows = 0
 
         options.encoding = self.encoding.currentText()

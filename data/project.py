@@ -29,15 +29,15 @@ def save_project_state(file_path, state):
         file_path (str): Path to save the project state.
         state (dict): The project state to save.
     """
-    Logger.log_message_static(f"Saving project state to {os.path.basename(file_path)}", Logger.INFO)
+    Logger.log_message_static(f"Data-Project: Saving project state to {os.path.basename(file_path)}", Logger.INFO)
 
     try:
-        Logger.log_message_static(f"Project state contains {len(state)} entries", Logger.DEBUG)
+        Logger.log_message_static(f"Data-Project: Project state contains {len(state)} entries", Logger.DEBUG)
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(state, f, indent=4)
-        Logger.log_message_static("Project state saved successfully", Logger.INFO)
+        Logger.log_message_static("Data-Project: Project state saved successfully", Logger.INFO)
     except Exception as e:
-        Logger.log_message_static(f"Failed to save project state: {str(e)}", Logger.ERROR)
+        Logger.log_message_static(f"Data-Project: Failed to save project state: {str(e)}", Logger.ERROR)
         raise IOError(f"Failed to save project state: {e}")
 
 def load_project_state(file_path):
@@ -50,20 +50,20 @@ def load_project_state(file_path):
     Returns:
         dict: The loaded project state.
     """
-    Logger.log_message_static(f"Loading project state from {os.path.basename(file_path)}", Logger.INFO)
+    Logger.log_message_static(f"Data-Project: Loading project state from {os.path.basename(file_path)}", Logger.INFO)
 
     if not os.path.exists(file_path):
-        Logger.log_message_static(f"Project file not found: {file_path}", Logger.ERROR)
+        Logger.log_message_static(f"Data-Project: Project file not found: {file_path}", Logger.ERROR)
         raise FileNotFoundError(f"File not found: {file_path}")
 
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             state = json.load(f)
-        Logger.log_message_static(f"Project state loaded successfully with {len(state)} entries", Logger.INFO)
+        Logger.log_message_static(f"Data-Project: Project state loaded successfully with {len(state)} entries", Logger.INFO)
         return state
     except json.JSONDecodeError as e:
-        Logger.log_message_static(f"Invalid JSON in project file: {str(e)}", Logger.ERROR)
+        Logger.log_message_static(f"Data-Project: Invalid JSON in project file: {str(e)}", Logger.ERROR)
         raise IOError(f"Failed to load project state: Invalid JSON format - {e}")
     except Exception as e:
-        Logger.log_message_static(f"Failed to load project state: {str(e)}", Logger.ERROR)
+        Logger.log_message_static(f"Data-Project: Failed to load project state: {str(e)}", Logger.ERROR)
         raise IOError(f"Failed to load project state: {e}")

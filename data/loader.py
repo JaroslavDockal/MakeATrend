@@ -37,18 +37,18 @@ def load_single_file():
     Returns:
         dict: Dictionary of signals {name: (time_array, value_array)}.
     """
-    Logger.log_message_static("Opening file dialog to load a single file.", Logger.INFO)
+    Logger.log_message_static("Data-Loader: Opening file dialog to load a single file.", Logger.INFO)
     path, _ = QFileDialog.getOpenFileName(None, "Open Data File", "", "Data Files (*.csv *.txt)")
     if not path:
-        Logger.log_message_static("No file selected. Operation canceled.", Logger.DEBUG)
+        Logger.log_message_static("Data-Loader: No file selected. Operation canceled.", Logger.DEBUG)
         return {}
 
     try:
         time_arr, signals = parse_csv_or_recorder(path)
-        Logger.log_message_static(f"Successfully loaded file '{os.path.basename(path)}' with {len(signals)} signals.", Logger.INFO)
+        Logger.log_message_static(f"Data-Loader: Successfully loaded file '{os.path.basename(path)}' with {len(signals)} signals.", Logger.INFO)
         return {name: (time_arr, values) for name, values in signals.items()}
     except Exception as e:
-        Logger.log_message_static(f"Failed to load file '{os.path.basename(path)}'. Exception: {e}", Logger.ERROR)
+        Logger.log_message_static(f"Data-Loader: Failed to load file '{os.path.basename(path)}'. Exception: {e}", Logger.ERROR)
         return {}
 
 def load_multiple_files(file_paths=None):
@@ -60,10 +60,10 @@ def load_multiple_files(file_paths=None):
         dict[str, tuple[np.ndarray, np.ndarray]]: signal name -> (time, values)
     """
     if file_paths is None:
-        Logger.log_message_static("Opening file dialog to load multiple files.", Logger.DEBUG)
+        Logger.log_message_static("Data-Loader: Opening file dialog to load multiple files.", Logger.DEBUG)
         file_paths, _ = QFileDialog.getOpenFileNames(None, "Open Data Files", "", "Data Files (*.csv *.txt)")
         if not file_paths:
-            Logger.log_message_static("No files selected. Operation canceled.", Logger.DEBUG)
+            Logger.log_message_static("Data-Loader: No files selected. Operation canceled.", Logger.DEBUG)
             return {}
 
     all_signals = {}
@@ -71,15 +71,15 @@ def load_multiple_files(file_paths=None):
     for path in file_paths:
         try:
             time_arr, signals = parse_csv_or_recorder(path)
-            Logger.log_message_static(f"Successfully loaded file '{os.path.basename(path)}' with {len(signals)} signals.", Logger.DEBUG)
+            Logger.log_message_static(f"Data-Loader: Successfully loaded file '{os.path.basename(path)}' with {len(signals)} signals.", Logger.DEBUG)
             for name, values in signals.items():
                 if name not in all_signals:
                     all_signals[name] = [(time_arr, values)]
                 else:
-                    Logger.log_message_static(f"Signal '{name}' already exists. Appending new data.", Logger.WARNING)
+                    Logger.log_message_static(f"Data-Loader: Signal '{name}' already exists. Appending new data.", Logger.WARNING)
                     all_signals[name].append((time_arr, values))
         except Exception as e:
-            Logger.log_message_static(f"Failed to load file '{os.path.basename(path)}'. Exception: {e}", Logger.ERROR)
+            Logger.log_message_static(f"Data-Loader: Failed to load file '{os.path.basename(path)}'. Exception: {e}", Logger.ERROR)
             continue
 
     result = {}
@@ -88,8 +88,8 @@ def load_multiple_files(file_paths=None):
         merged_time = np.concatenate([p[0] for p in parts])
         merged_values = np.concatenate([p[1] for p in parts])
         result[name] = (merged_time, merged_values)
-        Logger.log_message_static(f"Merged signal '{name}' with {len(merged_time)} points.", Logger.DEBUG)
+        Logger.log_message_static(f"Data-Loader: Merged signal '{name}' with {len(merged_time)} points.", Logger.DEBUG)
 
-    Logger.log_message_static(f"Successfully loaded and merged {len(result)} signals from {len(file_paths)} files.", Logger.INFO)
+    Logger.log_message_static(f"Data-Loader: Successfully loaded and merged {len(result)} signals from {len(file_paths)} files.", Logger.INFO)
     return result
 

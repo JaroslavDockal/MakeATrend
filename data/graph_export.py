@@ -42,21 +42,21 @@ def export_graph(plot_widget, parent_widget=None, export_full_window=False):
     Returns:
         bool: True if export was successful, otherwise False.
     """
-    Logger.log_message_static("Starting graph export", Logger.INFO)
+    Logger.log_message_static("Data-Graph: Starting graph export", Logger.INFO)
 
     try:
         # Determine what to export
         if export_full_window and parent_widget:
             export_widget = parent_widget
-            Logger.log_message_static("Exporting full application window", Logger.DEBUG)
+            Logger.log_message_static("Data-Graph: Exporting full application window", Logger.DEBUG)
         else:
             export_widget = plot_widget
-            Logger.log_message_static("Exporting only plot widget", Logger.DEBUG)
+            Logger.log_message_static("Data-Graph: Exporting only plot widget", Logger.DEBUG)
 
         # Get current dimensions of what we're exporting
         current_width = export_widget.width()
         current_height = export_widget.height()
-        Logger.log_message_static(f"Original widget dimensions: {current_width}x{current_height} pixels", Logger.DEBUG)
+        Logger.log_message_static(f"Data-Graph: Original widget dimensions: {current_width}x{current_height} pixels", Logger.DEBUG)
 
         # Ensure at least Full HD resolution (1920x1080)
         MIN_WIDTH = 1920
@@ -88,11 +88,11 @@ def export_graph(plot_widget, parent_widget=None, export_full_window=False):
                 export_height = MIN_HEIGHT
                 export_width = int(MIN_HEIGHT * aspect_ratio)
 
-        Logger.log_message_static(f"Export dimensions set to {export_width}x{export_height} pixels", Logger.DEBUG)
+        Logger.log_message_static(f"Data-Graph: Export dimensions set to {export_width}x{export_height} pixels", Logger.DEBUG)
 
         # Offer file selection
         file_filters = "PNG images (*.png);;PDF documents (*.pdf);;SVG vector format (*.svg)"
-        Logger.log_message_static("Opening file save dialog", Logger.DEBUG)
+        Logger.log_message_static("Data-Graph: Opening file save dialog", Logger.DEBUG)
         file_path, selected_filter = QFileDialog.getSaveFileName(
             parent_widget,
             "Export Graph",
@@ -101,7 +101,7 @@ def export_graph(plot_widget, parent_widget=None, export_full_window=False):
         )
 
         if not file_path:
-            Logger.log_message_static("Export cancelled by user", Logger.INFO)
+            Logger.log_message_static("Data-Graph: Export cancelled by user", Logger.INFO)
             return False
 
         # Determine format by selected filter
@@ -123,7 +123,7 @@ def export_graph(plot_widget, parent_widget=None, export_full_window=False):
             if not file_path.lower().endswith('.png'):
                 file_path += '.png'
 
-        Logger.log_message_static(f"Exporting graph as {export_format.upper()} to {file_path}", Logger.DEBUG)
+        Logger.log_message_static(f"Data-Graph: Exporting graph as {export_format.upper()} to {file_path}", Logger.DEBUG)
 
         # Use PyQtGraph's exporter for PNG/SVG to ensure we get the entire view
         if export_format in ['png', 'svg']:
@@ -131,11 +131,11 @@ def export_graph(plot_widget, parent_widget=None, export_full_window=False):
                 # Import specific exporter based on format
                 if export_format == 'png':
                     from pyqtgraph.exporters import ImageExporter
-                    Logger.log_message_static("Using PyQtGraph ImageExporter", Logger.DEBUG)
+                    Logger.log_message_static("Data-Graph: Using PyQtGraph ImageExporter", Logger.DEBUG)
                     exporter = ImageExporter(plot_widget.plotItem)
                 elif export_format == 'svg':
                     from pyqtgraph.exporters import SVGExporter
-                    Logger.log_message_static("Using PyQtGraph SVGExporter", Logger.DEBUG)
+                    Logger.log_message_static("Data-Graph: Using PyQtGraph SVGExporter", Logger.DEBUG)
                     exporter = SVGExporter(plot_widget.plotItem)
 
                 # Set export dimensions
@@ -147,11 +147,11 @@ def export_graph(plot_widget, parent_widget=None, export_full_window=False):
                 exporter.export(file_path)
 
                 success = os.path.exists(file_path) and os.path.getsize(file_path) > 0
-                Logger.log_message_static(f"Export result: {success}", Logger.DEBUG)
+                Logger.log_message_static(f"Data-Graph: Export result: {success}", Logger.DEBUG)
 
                 if success:
                     file_size = os.path.getsize(file_path)
-                    Logger.log_message_static(f"Export successful: {file_path} ({file_size} bytes)", Logger.INFO)
+                    Logger.log_message_static(f"Data-Graph: Export successful: {file_path} ({file_size} bytes)", Logger.INFO)
                     QMessageBox.information(
                         parent_widget,
                         "Export Successful",
@@ -159,11 +159,11 @@ def export_graph(plot_widget, parent_widget=None, export_full_window=False):
                     )
                     return True
             except ImportError as e:
-                Logger.log_message_static(f"PyQtGraph exporter not available: {str(e)}, falling back to manual export",
+                Logger.log_message_static(f"Data-Graph: PyQtGraph exporter not available: {str(e)}, falling back to manual export",
                                           Logger.WARNING)
                 # Continue with manual export if PyQtGraph exporters aren't available
             except Exception as e:
-                Logger.log_message_static(f"Error with PyQtGraph exporter: {str(e)}, falling back to manual export",
+                Logger.log_message_static(f"Data-Graph: Error with PyQtGraph exporter: {str(e)}, falling back to manual export",
                                           Logger.WARNING)
                 # Continue with manual export if PyQtGraph exporter fails
 
@@ -183,7 +183,7 @@ def export_graph(plot_widget, parent_widget=None, export_full_window=False):
         if export_width != current_width or export_height != current_height:
             scale_x = export_width / current_width
             scale_y = export_height / current_height
-            Logger.log_message_static(f"Scaling by factors: x={scale_x:.2f}, y={scale_y:.2f}", Logger.DEBUG)
+            Logger.log_message_static(f"Data-Graph: Scaling by factors: x={scale_x:.2f}, y={scale_y:.2f}", Logger.DEBUG)
             painter.scale(scale_x, scale_y)
 
         # Render the widget to the pixmap
@@ -194,12 +194,12 @@ def export_graph(plot_widget, parent_widget=None, export_full_window=False):
         success = False
 
         if export_format == 'png':
-            Logger.log_message_static("Saving as PNG image (manual method)", Logger.DEBUG)
+            Logger.log_message_static("Data-Graph: Saving as PNG image (manual method)", Logger.DEBUG)
             success = pixmap.save(file_path, "PNG")
-            Logger.log_message_static(f"PNG save result: {success}", Logger.DEBUG)
+            Logger.log_message_static(f"Data-Graph: PNG save result: {success}", Logger.DEBUG)
 
         elif export_format == 'pdf':
-            Logger.log_message_static("Saving as PDF document", Logger.DEBUG)
+            Logger.log_message_static("Data-Graph: Saving as PDF document", Logger.DEBUG)
             try:
                 from PySide6.QtPrintSupport import QPrinter
                 from PySide6.QtCore import QPageLayout
@@ -222,30 +222,30 @@ def export_graph(plot_widget, parent_widget=None, export_full_window=False):
                 # Create PDF painter and draw the pixmap to it
                 pdf_painter = QPainter()
                 if pdf_painter.begin(printer):
-                    Logger.log_message_static("PDF painter started successfully", Logger.DEBUG)
+                    Logger.log_message_static("Data-Graph: PDF painter started successfully", Logger.DEBUG)
                     pdf_painter.drawPixmap(0, 0, pixmap)
                     pdf_painter.end()
                     success = os.path.exists(file_path) and os.path.getsize(file_path) > 0
-                    Logger.log_message_static(f"PDF exists check: {os.path.exists(file_path)}", Logger.DEBUG)
+                    Logger.log_message_static(f"Data-Graph: PDF exists check: {os.path.exists(file_path)}", Logger.DEBUG)
                     if success:
-                        Logger.log_message_static(f"PDF size: {os.path.getsize(file_path)} bytes", Logger.DEBUG)
+                        Logger.log_message_static(f"Data-Graph: PDF size: {os.path.getsize(file_path)} bytes", Logger.DEBUG)
                 else:
-                    Logger.log_message_static("Failed to begin PDF painter", Logger.ERROR)
+                    Logger.log_message_static("Data-Graph: Failed to begin PDF painter", Logger.ERROR)
 
             except ImportError as e:
-                Logger.log_message_static(f"Failed to import QtPrintSupport: {str(e)}", Logger.ERROR)
+                Logger.log_message_static(f"Data-Graph: Failed to import QtPrintSupport: {str(e)}", Logger.ERROR)
                 QMessageBox.critical(parent_widget, "Export Error",
                                      "PDF export requires QtPrintSupport module.\nPlease use PNG format instead.")
                 return False
             except Exception as e:
-                Logger.log_message_static(f"PDF export error: {str(e)}", Logger.ERROR)
+                Logger.log_message_static(f"Data-Graph: PDF export error: {str(e)}", Logger.ERROR)
                 import traceback
-                Logger.log_message_static(f"PDF export traceback: {traceback.format_exc()}", Logger.DEBUG)
+                Logger.log_message_static(f"Data-Graph: PDF export traceback: {traceback.format_exc()}", Logger.DEBUG)
                 QMessageBox.critical(parent_widget, "PDF Export Error", str(e))
                 return False
 
         elif export_format == 'svg':
-            Logger.log_message_static("Saving as SVG vector graphic (manual method)", Logger.DEBUG)
+            Logger.log_message_static("Data-Graph: Saving as SVG vector graphic (manual method)", Logger.DEBUG)
             try:
                 from PySide6.QtSvg import QSvgGenerator
                 generator = QSvgGenerator()
@@ -261,10 +261,10 @@ def export_graph(plot_widget, parent_widget=None, export_full_window=False):
                     svg_painter.end()
                     success = os.path.exists(file_path) and os.path.getsize(file_path) > 0
                 else:
-                    Logger.log_message_static("Failed to begin SVG painter", Logger.ERROR)
+                    Logger.log_message_static("Data-Graph: Failed to begin SVG painter", Logger.ERROR)
 
             except ImportError as e:
-                Logger.log_message_static(f"Failed to import QtSvg: {str(e)}", Logger.ERROR)
+                Logger.log_message_static(f"Data-Graph: Failed to import QtSvg: {str(e)}", Logger.ERROR)
                 QMessageBox.critical(parent_widget, "Export Error",
                                      "SVG export requires QtSvg module.\nPlease use PNG format instead.")
                 return False
@@ -272,7 +272,7 @@ def export_graph(plot_widget, parent_widget=None, export_full_window=False):
         # Check if the export was successful
         if success:
             file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
-            Logger.log_message_static(f"Export successful: {file_path} ({file_size} bytes)", Logger.INFO)
+            Logger.log_message_static(f"Data-Graph: Export successful: {file_path} ({file_size} bytes)", Logger.INFO)
             QMessageBox.information(
                 parent_widget,
                 "Export Successful",
@@ -281,7 +281,7 @@ def export_graph(plot_widget, parent_widget=None, export_full_window=False):
             )
             return True
         else:
-            Logger.log_message_static(f"Export failed: {file_path}", Logger.ERROR)
+            Logger.log_message_static(f"Data-Graph: Export failed: {file_path}", Logger.ERROR)
             QMessageBox.critical(
                 parent_widget,
                 "Export Failed",
@@ -290,9 +290,9 @@ def export_graph(plot_widget, parent_widget=None, export_full_window=False):
             return False
 
     except Exception as e:
-        Logger.log_message_static(f"Unexpected error during export: {str(e)}", Logger.ERROR)
+        Logger.log_message_static(f"Data-Graph: Unexpected error during export: {str(e)}", Logger.ERROR)
         import traceback
-        Logger.log_message_static(f"Export error traceback: {traceback.format_exc()}", Logger.DEBUG)
+        Logger.log_message_static(f"Data-Graph: Export error traceback: {traceback.format_exc()}", Logger.DEBUG)
         QMessageBox.critical(
             parent_widget,
             "Export Error",
@@ -311,23 +311,23 @@ def export_graph_fallback(plot_widget, parent_widget=None):
     Returns:
         bool: True if export was successful, otherwise False.
     """
-    Logger.log_message_static("Using fallback graph export method", Logger.DEBUG)
+    Logger.log_message_static("Data-Graph: Using fallback graph export method", Logger.DEBUG)
 
     try:
         # Try to import the exporter from PyQtGraph
         from pyqtgraph.exporters import ImageExporter
-        Logger.log_message_static("Successfully imported PyQtGraph ImageExporter", Logger.DEBUG)
+        Logger.log_message_static("Data-Graph: Successfully imported PyQtGraph ImageExporter", Logger.DEBUG)
 
-        Logger.log_message_static("Opening file save dialog", Logger.DEBUG)
+        Logger.log_message_static("Data-Graph: Opening file save dialog", Logger.DEBUG)
         file_path, _ = QFileDialog.getSaveFileName(
             parent_widget, "Export Graph", "graph.png", "PNG images (*.png)"
         )
 
         if file_path:
-            Logger.log_message_static(f"Exporting graph to {os.path.basename(file_path)} using PyQtGraph", Logger.INFO)
+            Logger.log_message_static(f"Data-Graph: Exporting graph to {os.path.basename(file_path)} using PyQtGraph", Logger.INFO)
             exporter = ImageExporter(plot_widget.plotItem)
             exporter.export(file_path)
-            Logger.log_message_static("PyQtGraph export successful", Logger.INFO)
+            Logger.log_message_static("Data-Graph: PyQtGraph export successful", Logger.INFO)
             QMessageBox.information(
                 parent_widget,
                 "Export Complete",
@@ -335,12 +335,12 @@ def export_graph_fallback(plot_widget, parent_widget=None):
             )
             return True
         else:
-            Logger.log_message_static("Export canceled by user", Logger.DEBUG)
+            Logger.log_message_static("Data-Graph: Export canceled by user", Logger.DEBUG)
             return False
     except ImportError:
-        Logger.log_message_static("PyQtGraph ImageExporter not available, using built-in export", Logger.WARNING)
+        Logger.log_message_static("Data-Graph: PyQtGraph ImageExporter not available, using built-in export", Logger.WARNING)
         # If exporter is not available, try our own export
         return export_graph(plot_widget, parent_widget)
     except Exception as e:
-        Logger.log_message_static(f"Error in fallback export: {str(e)}", Logger.ERROR)
+        Logger.log_message_static(f"Data-Graph: Error in fallback export: {str(e)}", Logger.ERROR)
         return False

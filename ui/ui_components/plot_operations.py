@@ -64,7 +64,7 @@ def clear_signals(self):
     """
     Removes all signal plots and resets widgets.
     """
-    self.log_message("Clearing all signals from plot", self.DEBUG)
+    self.log_message("Components-PlotOp: Clearing all signals from plot", self.DEBUG)
     for curve in self.curves.values():
         for vb in self.viewboxes.values():
             vb.removeItem(curve)
@@ -92,7 +92,7 @@ def toggle_signal(self):
     for name, widgets in self.signal_widgets.items():
         if widgets['checkbox'] == cb:
             if cb.isChecked():
-                self.log_message(f"Displaying signal: {name}", self.DEBUG)
+                self.log_message(f"Components-PlotOp: Displaying signal: {name}", self.DEBUG)
                 # Použít barvu z tlačítka, které již bylo inicializováno pomocí SignalColors
                 color = widgets['color_btn'].palette().button().color().name()
                 width = 2
@@ -108,11 +108,11 @@ def toggle_signal(self):
                     self.viewboxes['Digital'].setYRange(-0.1, 1.1, padding=0.1)
                     # Convert TRUE/FALSE to 1.0/0.0
                     time_arr, value_arr = self.data_signals[name]
-                    self.log_message(f"Original values for {name}: {value_arr}", self.DEBUG)
+                    self.log_message(f"Components-PlotOp: Original values for {name}: {value_arr}", self.DEBUG)
                     numeric_values = np.array(
                         [1.0 if str(val).upper() == 'TRUE' else 0.0 for val in value_arr if val is not None],
                         dtype=np.float32)
-                    self.log_message(f"Converted values for {name}: {value_arr}", self.DEBUG)
+                    self.log_message(f"Components-PlotOp: Converted values for {name}: {value_arr}", self.DEBUG)
 
                     # Use the converted numeric values instead of the original ones
                     curve = pg.PlotCurveItem(x=time_arr, y=numeric_values, pen=pen)
@@ -143,7 +143,7 @@ def toggle_signal(self):
                 # Force a refresh of the plot
                 self.plot_widget.plotItem.update()
             else:
-                self.log_message(f"Hiding signal: {name}", self.DEBUG)
+                self.log_message(f"Components-PlotOp: Hiding signal: {name}", self.DEBUG)
                 curve = self.curves.pop(name, None)
                 if curve:
                     axis = self.signal_styles[name][0]
@@ -196,7 +196,7 @@ def pick_color(self, btn):
     color = QColorDialog.getColor()
     if color.isValid():
         btn.setStyleSheet(f"background-color: {color.name()}")
-        self.log_message(f"Changed signal color for '{signal_name}' to {color.name()}", self.DEBUG)
+        self.log_message(f"Components-PlotOp: Changed signal color for '{signal_name}' to {color.name()}", self.DEBUG)
 
         # If signal is currently shown, update its color
         if signal_name in self.curves:
@@ -240,7 +240,7 @@ def downsample_signal(self, time_arr, value_arr, max_points):
     if len(time_arr) <= max_points:
         return time_arr, value_arr
 
-    self.log_message(f"Downsampling signal from {len(time_arr)} to ~{max_points} points", self.DEBUG)
+    self.log_message(f"Components-PlotOp: Downsampling signal from {len(time_arr)} to ~{max_points} points", self.DEBUG)
 
     # Calculate stride for even sampling
     stride = len(time_arr) // max_points
@@ -259,6 +259,6 @@ def downsample_signal(self, time_arr, value_arr, max_points):
         ds_time = np.append(ds_time, time_arr[-1])
         ds_values = np.append(ds_values, value_arr[-1])
 
-    self.log_message(f"Downsampled signal from {len(time_arr)} to {len(ds_time)} points", self.DEBUG)
+    self.log_message(f"Components-PlotOp: Downsampled signal from {len(time_arr)} to {len(ds_time)} points", self.DEBUG)
 
     return ds_time, ds_values

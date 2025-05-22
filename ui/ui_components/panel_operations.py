@@ -18,7 +18,7 @@ def toggle_complex_mode(self, state):
     Args:
         state (bool): True to enable complex mode, False for simple mode.
     """
-    self.log_message(f"Advanced mode {'enabled' if state else 'disabled'}", self.INFO)
+    self.log_message(f"Components-PanelOp: Advanced mode {'enabled' if state else 'disabled'}", self.INFO)
     self.complex_mode = state
     for widgets in self.signal_widgets.values():
         widgets['axis'].setVisible(state)
@@ -36,7 +36,7 @@ def toggle_right_panel(self, checked):
     Args:
         checked (bool): True to hide the panel, False to show it.
     """
-    self.log_message(f"Control panel {'hidden' if checked else 'shown'}", self.DEBUG)
+    self.log_message(f"Components-PanelOp: Control panel {'hidden' if checked else 'shown'}", self.DEBUG)
     self.control_panel.setVisible(not checked)
     self.show_panel_btn.setVisible(checked)
 
@@ -48,7 +48,7 @@ def toggle_cursor_info_mode(self, docked):
     Args:
         docked (bool): If True, docks the info panel.
     """
-    self.log_message(f"Cursor info panel {'docked' if docked else 'undocked'}", self.DEBUG)
+    self.log_message(f"Components-PanelOp: Cursor info panel {'docked' if docked else 'undocked'}", self.DEBUG)
 
     if docked:
         for i in reversed(range(self.scroll_layout.count())):
@@ -71,7 +71,7 @@ def toggle_crosshair(self, state):
     Args:
         state (bool): True to show, False to hide.
     """
-    self.log_message(f"Crosshair {'enabled' if state else 'disabled'}", self.DEBUG)
+    self.log_message(f"Components-PanelOp: Crosshair {'enabled' if state else 'disabled'}", self.DEBUG)
     self.crosshair.toggle(state)
 
 
@@ -82,7 +82,7 @@ def toggle_grid(self, state: bool):
     Args:
         state (bool): True = show grid, False = hide.
     """
-    self.log_message(f"Grid lines {'shown' if state else 'hidden'}", self.DEBUG)
+    self.log_message(f"Components-PanelOp: Grid lines {'shown' if state else 'hidden'}", self.DEBUG)
     self.plot_widget.showGrid(x=state, y=state)
 
 
@@ -95,7 +95,7 @@ def toggle_cursor(self, cursor, state):
         state (bool): Visibility flag.
     """
     cursor_name = 'A' if cursor == self.cursor_a else 'B'
-    self.log_message(f"{'Showing' if state else 'Hiding'} cursor {'A' if cursor == self.cursor_a else 'B'}", self.DEBUG)
+    self.log_message(f"Components-PanelOp: {'Showing' if state else 'Hiding'} cursor {'A' if cursor == self.cursor_a else 'B'}", self.DEBUG)
     cursor.setVisible(state)
     if state:
         try:
@@ -107,14 +107,14 @@ def toggle_cursor(self, cursor, state):
             if mid is not None:
                 cursor.setPos(mid)
             else:
-                self.log_message(f"Could not position cursor {cursor_name}: No valid time data found", self.WARNING)
+                self.log_message(f"Components-PanelOp: Could not position cursor {cursor_name}: No valid time data found", self.WARNING)
 
         except KeyError as e:
-            self.log_message(f"Error accessing data signal: {str(e)}", self.ERROR)
+            self.log_message(f"Components-PanelOp: Error accessing data signal: {str(e)}", self.ERROR)
         except IndexError as e:
-            self.log_message(f"Index error while positioning cursor {cursor_name}: {str(e)}", self.ERROR)
+            self.log_message(f"Components-PanelOp: Index error while positioning cursor {cursor_name}: {str(e)}", self.ERROR)
         except TypeError as e:
-            self.log_message(f"Type error while positioning cursor {cursor_name}: {str(e)}", self.ERROR)
+            self.log_message(f"Components-PanelOp: Type error while positioning cursor {cursor_name}: {str(e)}", self.ERROR)
 
     self.cursor_info.setVisible(self.cursor_a.isVisible() or self.cursor_b.isVisible())
     self.update_cursor_info()
@@ -156,7 +156,7 @@ def update_cursor_info(self):
     except Exception:
         date_str = "Unknown"
 
-    self.log_message(f"Updating cursor info: A={s_a}, B={s_b}", self.DEBUG)
+    self.log_message(f"Components-PanelOp: Updating cursor info: A={s_a}, B={s_b}", self.DEBUG)
 
     def get_vals(t, enabled):
         vals = {}
@@ -185,7 +185,7 @@ def toggle_log_window(self, state):
     Args:
         state (bool): True to show, False to hide.
     """
-    self.log_message(f"Log window {'shown' if state else 'hidden'}", self.DEBUG)
+    self.log_message(f"Components-PanelOp: Log window {'shown' if state else 'hidden'}", self.DEBUG)
 
     if state:
         self.log_window.show()

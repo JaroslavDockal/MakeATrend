@@ -18,7 +18,7 @@ def safe_sample_rate(time_arr):
     Returns:
         float: Sampling rate in inverse time units, or 0.0 if calculation fails.
     """
-    Logger.log_message_static(f"Calculating sampling rate from time array with {len(time_arr)} points", Logger.DEBUG)
+    Logger.log_message_static(f"Analysis-Helpers: Calculating sampling rate from time array with {len(time_arr)} points", Logger.DEBUG)
 
     # Validate input array length
     if len(time_arr) < 2:
@@ -48,7 +48,7 @@ def safe_sample_rate(time_arr):
 
     # Calculate mean time difference
     mean_dt = np.mean(dt)
-    Logger.log_message_static(f"Mean time difference: {mean_dt:.6f}", Logger.DEBUG)
+    Logger.log_message_static(f"Analysis-Helpers: Mean time difference: {mean_dt:.6f}", Logger.DEBUG)
 
     # Validate mean time difference
     if mean_dt <= 0:
@@ -104,7 +104,7 @@ def safe_prepare_signal(values, dialog, title="Signal Validation"):
         np.ndarray or None: Cleaned signal array, or None if validation fails
                            or user cancels the operation.
     """
-    Logger.log_message_static(f"Starting signal validation for '{title}'", Logger.DEBUG)
+    Logger.log_message_static(f"Analysis-Helpers: Starting signal validation for '{title}'", Logger.DEBUG)
     Logger.log_message_static(
         f"Input signal characteristics - Shape: {values.shape}, dtype: {values.dtype}, "
         f"Min: {np.nanmin(values):.6f}, Max: {np.nanmax(values):.6f}",
@@ -150,12 +150,12 @@ def safe_prepare_signal(values, dialog, title="Signal Validation"):
         response = msg.exec()
 
         if response == QMessageBox.StandardButton.Cancel:
-            Logger.log_message_static("User canceled non-finite value replacement - signal validation failed",
+            Logger.log_message_static("Analysis-Helpers: User canceled non-finite value replacement - signal validation failed",
                                       Logger.WARNING)
             return None
 
         # Replace non-finite values with zeros
-        Logger.log_message_static("Replacing non-finite values with zeros", Logger.INFO)
+        Logger.log_message_static("Analysis-Helpers: Replacing non-finite values with zeros", Logger.INFO)
         values_cleaned = np.nan_to_num(values, nan=0.0, posinf=0.0, neginf=0.0)
 
         # Verify replacement was successful
@@ -173,10 +173,10 @@ def safe_prepare_signal(values, dialog, title="Signal Validation"):
             )
             return None
 
-        Logger.log_message_static(f"Successfully replaced {non_finite_count} non-finite values with zeros", Logger.INFO)
+        Logger.log_message_static(f"Analysis-Helpers: Successfully replaced {non_finite_count} non-finite values with zeros", Logger.INFO)
         values = values_cleaned
     else:
-        Logger.log_message_static("No non-finite values detected in signal", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Helpers: No non-finite values detected in signal", Logger.DEBUG)
 
     # Check for zero-only signal
     zero_count = np.sum(values == 0)
@@ -251,8 +251,8 @@ def extended_prepare_signal(values, dialog, title="Signal Analysis"):
         AttributeError: If dialog parameter doesn't support QMessageBox parent functionality.
         ValueError: If values parameter cannot be processed as NumPy array.
     """
-    Logger.log_message_static(f"Starting extended signal preparation for '{title}'", Logger.DEBUG)
-    Logger.log_message_static(f"Input signal shape: {values.shape}, dtype: {values.dtype}", Logger.DEBUG)
+    Logger.log_message_static(f"Analysis-Helpers: Starting extended signal preparation for '{title}'", Logger.DEBUG)
+    Logger.log_message_static(f"Analysis-Helpers: Input signal shape: {values.shape}, dtype: {values.dtype}", Logger.DEBUG)
 
     # Calculate signal composition statistics
     total_values = len(values)
@@ -268,27 +268,27 @@ def extended_prepare_signal(values, dialog, title="Signal Analysis"):
 
     # Handle empty signal
     if total_values == 0:
-        Logger.log_message_static("Signal preprocessing failed: Empty signal detected", Logger.ERROR)
+        Logger.log_message_static("Analysis-Helpers: Signal preprocessing failed: Empty signal detected", Logger.ERROR)
         QMessageBox.critical(dialog, title, "Cannot process empty signal. Please provide valid signal data.")
         return None
 
     # Handle all-zero signal
     if zero_count == total_values:
-        Logger.log_message_static("Signal preprocessing stopped: All values are zero", Logger.WARNING)
+        Logger.log_message_static("Analysis-Helpers: Signal preprocessing stopped: All values are zero", Logger.WARNING)
         QMessageBox.information(dialog, title, "All values are zero. Cannot proceed.")
         return None
 
     # Calculate negative-to-positive ratio for decision making
     if positive_count == 0:
         negative_ratio = 1
-        Logger.log_message_static("Signal contains only negative and zero values", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Helpers: Signal contains only negative and zero values", Logger.DEBUG)
     else :
         negative_ratio = negative_count / positive_count
-        Logger.log_message_static(f"Negative-to-positive ratio: {negative_ratio:.4f}", Logger.DEBUG)
+        Logger.log_message_static(f"Analysis-Helpers: Negative-to-positive ratio: {negative_ratio:.4f}", Logger.DEBUG)
 
     # Skip dialog if the signal is entirely positive
     if negative_count == 0:
-        Logger.log_message_static("Signal is entirely positive. No further processing required.", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Helpers: Signal is entirely positive. No further processing required.", Logger.DEBUG)
         return values
 
     # Handle negligible negative values (< 5% compared to positives)
@@ -354,10 +354,10 @@ def extended_prepare_signal(values, dialog, title="Signal Analysis"):
 
     # Process user choice
     if msg.clickedButton() == cancel_button:
-        Logger.log_message_static("User canceled signal processing - operation aborted", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Helpers: User canceled signal processing - operation aborted", Logger.DEBUG)
         return None
     elif msg.clickedButton() == abs_button:
-        Logger.log_message_static("User selected absolute value transformation", Logger.INFO)
+        Logger.log_message_static("Analysis-Helpers: User selected absolute value transformation", Logger.INFO)
         result = np.abs(values)
         QMessageBox.information(
             dialog,
@@ -367,7 +367,7 @@ def extended_prepare_signal(values, dialog, title="Signal Analysis"):
         )
         return result
     elif msg.clickedButton() == pos_button:
-        Logger.log_message_static("User selected positive value preservation", Logger.INFO)
+        Logger.log_message_static("Analysis-Helpers: User selected positive value preservation", Logger.INFO)
         values_copy = values.copy()
         original_negatives = np.sum(values_copy < 0)
         values_copy[values_copy < 0] = 1e-10
@@ -377,10 +377,10 @@ def extended_prepare_signal(values, dialog, title="Signal Analysis"):
             f"Replaced {original_negatives} negative values with 1e-10.\n"
             f"Preserved {positive_count} positive values."
         )
-        Logger.log_message_static(f"Replaced {original_negatives} negative values with near-zero", Logger.DEBUG)
+        Logger.log_message_static(f"Analysis-Helpers: Replaced {original_negatives} negative values with near-zero", Logger.DEBUG)
         return values_copy
     elif msg.clickedButton() == neg_button:
-        Logger.log_message_static("User selected negative value preservation", Logger.INFO)
+        Logger.log_message_static("Analysis-Helpers: User selected negative value preservation", Logger.INFO)
         values_copy = values.copy()
         original_positives = np.sum(values_copy > 0)
         values_copy[values_copy > 0] = 1e-10
@@ -390,11 +390,11 @@ def extended_prepare_signal(values, dialog, title="Signal Analysis"):
             f"Replaced {original_positives} positive values with 1e-10.\n"
             f"Preserved {negative_count} negative values."
         )
-        Logger.log_message_static(f"Replaced {original_positives} positive values with near-zero", Logger.DEBUG)
+        Logger.log_message_static(f"Analysis-Helpers: Replaced {original_positives} positive values with near-zero", Logger.DEBUG)
         return values_copy
 
     # Fallback case (should not occur with proper button handling)
-    Logger.log_message_static("Unexpected dialog result, returning original values", Logger.WARNING)
+    Logger.log_message_static("Analysis-Helpers: Unexpected dialog result, returning original values", Logger.WARNING)
     return values
 
 def calculate_bandwidth(freqs, psd):
@@ -427,7 +427,7 @@ def calculate_bandwidth(freqs, psd):
             lower_idx = lower_indices[0]  # First crossing from left
             f_low = freqs[lower_idx]
         else:
-            Logger.log_message_static("Could not find lower 3dB point", Logger.WARNING)
+            Logger.log_message_static("Analysis-Helpers: Could not find lower 3dB point", Logger.WARNING)
             return "N/A"
 
         # Find upper 3dB frequency (above the peak)
@@ -436,7 +436,7 @@ def calculate_bandwidth(freqs, psd):
             upper_idx = upper_indices[-1]  # Last crossing from right
             f_high = freqs[upper_idx]
         else:
-            Logger.log_message_static("Could not find upper 3dB point", Logger.WARNING)
+            Logger.log_message_static("Analysis-Helpers: Could not find upper 3dB point", Logger.WARNING)
             return "N/A"
 
         # Calculate bandwidth
@@ -451,7 +451,7 @@ def calculate_bandwidth(freqs, psd):
         return f"{bandwidth:.2f} Hz"
 
     except Exception as e:
-        Logger.log_message_static(f"Error calculating bandwidth: {str(e)}", Logger.ERROR)
+        Logger.log_message_static(f"Analysis-Helpers: Error calculating bandwidth: {str(e)}", Logger.ERROR)
         return "Error"
 
 def format_array_for_display(arr, max_items=5):

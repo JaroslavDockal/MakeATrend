@@ -76,7 +76,7 @@ class SignalViewer(QMainWindow):
         self.signal_filter_text = ""
         self.color_counter = 0
 
-        self.log_message("Application starting", Logger.INFO)
+        self.log_message("Viewer: Application starting", Logger.INFO)
 
         self.init_ui()
 
@@ -88,7 +88,7 @@ class SignalViewer(QMainWindow):
         - Floating ☰ button to reopen hidden panel
         - Cursor lines and status bar
         """
-        self.log_message("Initializing main UI components", Logger.DEBUG)
+        self.log_message("Viewer: Initializing main UI components", Logger.DEBUG)
 
         splitter = QSplitter(Qt.Horizontal)
         self.setCentralWidget(splitter)

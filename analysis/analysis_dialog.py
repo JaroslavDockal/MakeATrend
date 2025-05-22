@@ -70,7 +70,7 @@ class SignalAnalysisDialog(QDialog):
             parent (QWidget): Parent widget, should be the main application window
                               that contains data_signals dictionary
         """
-        Logger.log_message_static("Initializing SignalAnalysisDialog", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Dialog: Initializing SignalAnalysisDialog", Logger.DEBUG)
         super().__init__(parent)
         self.parent = parent
         self.setWindowTitle("Signal Analysis")
@@ -79,16 +79,16 @@ class SignalAnalysisDialog(QDialog):
 
         # Store plot windows to prevent garbage collection
         self._plot_windows = []
-        Logger.log_message_static("Creating UI for signal analysis dialog", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Dialog: Creating UI for signal analysis dialog", Logger.DEBUG)
         self.setup_ui()
         self.update_signal_list()
-        Logger.log_message_static("SignalAnalysisDialog initialization complete", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Dialog: SignalAnalysisDialog initialization complete", Logger.DEBUG)
 
     def setup_ui(self):
         """
         Create and arrange the user interface components for the dialog.
         """
-        Logger.log_message_static("Setting up UI components for signal analysis dialog", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Dialog: Setting up UI components for signal analysis dialog", Logger.DEBUG)
         layout = QVBoxLayout(self)
 
         # Add a QSplitter to allow resizing between top and bottom areas
@@ -107,7 +107,7 @@ class SignalAnalysisDialog(QDialog):
         self.splitter.addWidget(top_widget)
 
         # ===== Basic Analysis Tab =====
-        Logger.log_message_static("Creating Basic Analysis tab", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Dialog: Creating Basic Analysis tab", Logger.DEBUG)
         basic_tab = QWidget()
         basic_layout = QVBoxLayout(basic_tab)
         self.tab_widget.addTab(basic_tab, "Basic Analysis")
@@ -138,7 +138,7 @@ class SignalAnalysisDialog(QDialog):
         basic_layout.addLayout(button_layout)
 
         # ===== Advanced Analysis Tab =====
-        Logger.log_message_static("Creating Advanced Analysis tab", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Dialog: Creating Advanced Analysis tab", Logger.DEBUG)
         adv_tab = QWidget()
         adv_layout = QVBoxLayout(adv_tab)
         self.tab_widget.addTab(adv_tab, "Advanced Analysis")
@@ -208,7 +208,7 @@ class SignalAnalysisDialog(QDialog):
         adv_layout.addLayout(adv_button_layout3)
 
         # ===== Cross Analysis Tab =====
-        Logger.log_message_static("Creating Cross Analysis tab", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Dialog: Creating Cross Analysis tab", Logger.DEBUG)
         cross_tab = QWidget()
         cross_layout = QVBoxLayout(cross_tab)
         self.tab_widget.addTab(cross_tab, "Cross Analysis")
@@ -232,7 +232,7 @@ class SignalAnalysisDialog(QDialog):
         cross_layout.addLayout(cross_button_layout)
 
         # Add the Explanations tab
-        Logger.log_message_static("Creating Explanations tab", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Dialog: Creating Explanations tab", Logger.DEBUG)
         explanation_tab = ExplanationTab(self)
         self.tab_widget.addTab(explanation_tab, "Explanations")
 
@@ -261,11 +261,11 @@ class SignalAnalysisDialog(QDialog):
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn)
 
-        Logger.log_message_static("UI setup complete for signal analysis dialog", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Dialog: UI setup complete for signal analysis dialog", Logger.DEBUG)
 
     def create_signal_selector(self):
         """Create a signal selection dropdown."""
-        Logger.log_message_static("Creating signal selector dropdown", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Dialog: Creating signal selector dropdown", Logger.DEBUG)
         self.signal_combo = QComboBox()
         return self.signal_combo
 
@@ -273,10 +273,10 @@ class SignalAnalysisDialog(QDialog):
         """
         Populate all signal selection dropdowns with available signals.
         """
-        Logger.log_message_static("Updating signal lists in all dropdowns", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Dialog: Updating signal lists in all dropdowns", Logger.DEBUG)
         if hasattr(self.parent, 'data_signals'):
             signals = list(self.parent.data_signals.keys())
-            Logger.log_message_static(f"Found {len(signals)} available signals", Logger.DEBUG)
+            Logger.log_message_static(f"Analysis-Dialog: Found {len(signals)} available signals", Logger.DEBUG)
 
             # Update all combo boxes
             self.signal_combo.clear()
@@ -291,7 +291,7 @@ class SignalAnalysisDialog(QDialog):
             self.cross_signal2_combo.clear()
             self.cross_signal2_combo.addItems(signals)
         else:
-            Logger.log_message_static("No data_signals attribute found in parent", Logger.WARNING)
+            Logger.log_message_static("Analysis-Dialog: No data_signals attribute found in parent", Logger.WARNING)
 
     def get_selected_signal(self, combo=None):
         """
@@ -309,17 +309,17 @@ class SignalAnalysisDialog(QDialog):
 
         signal = combo.currentText()
         if not signal:
-            Logger.log_message_static("No signal selected in dropdown", Logger.WARNING)
+            Logger.log_message_static("Analysis-Dialog: No signal selected in dropdown", Logger.WARNING)
             return None
 
-        Logger.log_message_static(f"Selected signal: '{signal}'", Logger.DEBUG)
+        Logger.log_message_static(f"Analysis-Dialog: Selected signal: '{signal}'", Logger.DEBUG)
         return signal
 
     def clear_results(self):
         """
         Clear all widgets from the results area to prepare for new results.
         """
-        Logger.log_message_static("Clearing results area", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Dialog: Clearing results area", Logger.DEBUG)
         for i in reversed(range(self.results_layout.count())):
             widget = self.results_layout.itemAt(i).widget()
             if widget:
@@ -330,20 +330,20 @@ class SignalAnalysisDialog(QDialog):
         Calculate and display basic statistics for the selected signal.
         Includes tabular results in panel and separate trend visualization in a new window.
         """
-        Logger.log_message_static("Calculating basic statistics", Logger.INFO)
+        Logger.log_message_static("Analysis-Dialog: Calculating basic statistics", Logger.INFO)
         signal = self.get_selected_signal()
         if not signal:
-            Logger.log_message_static("Cannot calculate statistics: No signal selected", Logger.WARNING)
+            Logger.log_message_static("Analysis-Dialog: Cannot calculate statistics: No signal selected", Logger.WARNING)
             return
 
-        Logger.log_message_static(f"Computing statistics for signal '{signal}'", Logger.DEBUG)
+        Logger.log_message_static(f"Analysis-Dialog: Computing statistics for signal '{signal}'", Logger.DEBUG)
         try:
             time_arr, values = self.parent.data_signals[signal]
-            Logger.log_message_static(f"Retrieved {len(values)} data points for statistics", Logger.DEBUG)
+            Logger.log_message_static(f"Analysis-Dialog: Retrieved {len(values)} data points for statistics", Logger.DEBUG)
 
             stats = calculate_basic_statistics(self, values)
             if stats is None:
-                Logger.log_message_static("Basic statistics calculation was cancelled or failed", Logger.INFO)
+                Logger.log_message_static("Analysis-Dialog: Basic statistics calculation was cancelled or failed", Logger.INFO)
                 return
 
             # === 1) Show tabular results in main panel (as before) ===
@@ -361,7 +361,7 @@ class SignalAnalysisDialog(QDialog):
             header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
             header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
 
-            Logger.log_message_static(f"Creating results table with {len(stats)} rows", Logger.DEBUG)
+            Logger.log_message_static(f"Analysis-Dialog: Creating results table with {len(stats)} rows", Logger.DEBUG)
 
             for i, (key, value) in enumerate(stats.items()):
                 table.setItem(i, 0, QTableWidgetItem(key))
@@ -369,7 +369,7 @@ class SignalAnalysisDialog(QDialog):
                     table.setItem(i, 1, QTableWidgetItem(f"{value:.6g}"))
                 else:
                     table.setItem(i, 1, QTableWidgetItem(str(value)))
-                Logger.log_message_static(f"Added table row: {key} = {value}", Logger.DEBUG)
+                Logger.log_message_static(f"Analysis-Dialog: Added table row: {key} = {value}", Logger.DEBUG)
 
             self.results_layout.addWidget(table)
 
@@ -446,33 +446,33 @@ class SignalAnalysisDialog(QDialog):
             plot_window.show()
             self._plot_windows.append(plot_window)
 
-            Logger.log_message_static("Basic statistics displayed with trend", Logger.INFO)
+            Logger.log_message_static("Analysis-Dialog: Basic statistics displayed with trend", Logger.INFO)
 
         except KeyError:
-            Logger.log_message_static(f"Signal '{signal}' not found in data_signals", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Signal '{signal}' not found in data_signals", Logger.ERROR)
         except Exception as e:
-            Logger.log_message_static(f"Error calculating statistics: {str(e)}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Error calculating statistics: {str(e)}", Logger.ERROR)
             import traceback
-            Logger.log_message_static(f"Statistics traceback: {traceback.format_exc()}", Logger.DEBUG)
+            Logger.log_message_static(f"Analysis-Dialog: Statistics traceback: {traceback.format_exc()}", Logger.DEBUG)
 
     def show_fft_analysis(self):
         """
         Perform FFT analysis on the selected signal and display results in time and frequency domains.
         Uses `calculate_fft_analysis` internally.
         """
-        Logger.log_message_static("Preparing FFT analysis", Logger.INFO)
+        Logger.log_message_static("Analysis-Dialog: Preparing FFT analysis", Logger.INFO)
         signal = self.get_selected_signal()
         if not signal:
-            Logger.log_message_static("Cannot perform FFT: No signal selected", Logger.WARNING)
+            Logger.log_message_static("Analysis-Dialog: Cannot perform FFT: No signal selected", Logger.WARNING)
             return
 
         try:
             time_arr, values = self.parent.data_signals[signal]
-            Logger.log_message_static(f"Retrieved {len(values)} data points for FFT analysis", Logger.DEBUG)
+            Logger.log_message_static(f"Analysis-Dialog: Retrieved {len(values)} data points for FFT analysis", Logger.DEBUG)
 
             results = calculate_fft_analysis(self, time_arr, values)
             if results is None:
-                Logger.log_message_static("FFT analysis aborted or failed", Logger.INFO)
+                Logger.log_message_static("Analysis-Dialog: FFT analysis aborted or failed", Logger.INFO)
                 return
 
             # Extract result data
@@ -517,7 +517,7 @@ class SignalAnalysisDialog(QDialog):
             plot_window.show()
 
             self._plot_windows.append(plot_window)
-            Logger.log_message_static("FFT plot window displayed successfully", Logger.INFO)
+            Logger.log_message_static("Analysis-Dialog: FFT plot window displayed successfully", Logger.INFO)
 
             # Display summary stats
             stats = {
@@ -529,30 +529,30 @@ class SignalAnalysisDialog(QDialog):
             self.show_analysis_results("FFT Spectrum", signal, stats)
 
         except KeyError:
-            Logger.log_message_static(f"Signal '{signal}' not found in data_signals", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Signal '{signal}' not found in data_signals", Logger.ERROR)
         except Exception as e:
-            Logger.log_message_static(f"Error in FFT analysis: {str(e)}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Error in FFT analysis: {str(e)}", Logger.ERROR)
             import traceback
-            Logger.log_message_static(f"FFT traceback: {traceback.format_exc()}", Logger.DEBUG)
+            Logger.log_message_static(f"Analysis-Dialog: FFT traceback: {traceback.format_exc()}", Logger.DEBUG)
 
     def show_time_analysis(self):
         """
         Perform time-domain analysis on the selected signal and display the results
         with both visualization and detailed metrics.
         """
-        Logger.log_message_static("Performing time-domain analysis", Logger.INFO)
+        Logger.log_message_static("Analysis-Dialog: Performing time-domain analysis", Logger.INFO)
         signal = self.get_selected_signal()
         if not signal:
-            Logger.log_message_static("Cannot perform time analysis: No signal selected", Logger.WARNING)
+            Logger.log_message_static("Analysis-Dialog: Cannot perform time analysis: No signal selected", Logger.WARNING)
             return
 
         try:
             time_arr, values = self.parent.data_signals[signal]
-            Logger.log_message_static(f"Retrieved {len(values)} data points for time analysis", Logger.DEBUG)
+            Logger.log_message_static(f"Analysis-Dialog: Retrieved {len(values)} data points for time analysis", Logger.DEBUG)
 
             results = calculate_time_domain_analysis(self, time_arr, values)
             if results is None:
-                Logger.log_message_static("Time-domain analysis cancelled or failed", Logger.INFO)
+                Logger.log_message_static("Analysis-Dialog: Time-domain analysis cancelled or failed", Logger.INFO)
                 return
 
             self.clear_results()
@@ -663,14 +663,14 @@ class SignalAnalysisDialog(QDialog):
             table.setRowCount(row)
             self.results_layout.addWidget(table)
 
-            Logger.log_message_static("Time-domain analysis results displayed with visualization", Logger.INFO)
+            Logger.log_message_static("Analysis-Dialog: Time-domain analysis results displayed with visualization", Logger.INFO)
 
         except KeyError:
-            Logger.log_message_static(f"Signal '{signal}' not found in data_signals", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Signal '{signal}' not found in data_signals", Logger.ERROR)
         except Exception as e:
-            Logger.log_message_static(f"Error in time-domain analysis: {str(e)}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Error in time-domain analysis: {str(e)}", Logger.ERROR)
             import traceback
-            Logger.log_message_static(f"Time analysis traceback: {traceback.format_exc()}", Logger.DEBUG)
+            Logger.log_message_static(f"Analysis-Dialog: Time analysis traceback: {traceback.format_exc()}", Logger.DEBUG)
 
     def show_psd_analysis(self):
         """
@@ -681,19 +681,19 @@ class SignalAnalysisDialog(QDialog):
 
         GUI-specific: uses self.parent.data_signals, self.display_results, self._plot_windows, etc.
         """
-        Logger.log_message_static("Preparing PSD analysis", Logger.INFO)
+        Logger.log_message_static("Analysis-Dialog: Preparing PSD analysis", Logger.INFO)
         signal = self.get_selected_signal(self.adv_signal_combo)
         if not signal:
-            Logger.log_message_static("Cannot perform PSD analysis: No signal selected", Logger.WARNING)
+            Logger.log_message_static("Analysis-Dialog: Cannot perform PSD analysis: No signal selected", Logger.WARNING)
             return
 
         try:
             time_arr, values = self.parent.data_signals[signal]
-            Logger.log_message_static(f"Retrieved {len(values)} data points for PSD analysis", Logger.DEBUG)
+            Logger.log_message_static(f"Analysis-Dialog: Retrieved {len(values)} data points for PSD analysis", Logger.DEBUG)
 
             result = calculate_psd_analysis(self, time_arr, values)
             if result is None:
-                Logger.log_message_static("PSD analysis returned no result", Logger.WARNING)
+                Logger.log_message_static("Analysis-Dialog: PSD analysis returned no result", Logger.WARNING)
                 return
 
             freqs = result["Frequency Axis (Hz)"]
@@ -730,7 +730,7 @@ class SignalAnalysisDialog(QDialog):
             plot_window.setCentralWidget(central_widget)
             plot_window.show()
 
-            Logger.log_message_static("PSD plot window displayed successfully", Logger.INFO)
+            Logger.log_message_static("Analysis-Dialog: PSD plot window displayed successfully", Logger.INFO)
             self._plot_windows.append(plot_window)
 
             # Show stats
@@ -743,11 +743,11 @@ class SignalAnalysisDialog(QDialog):
             })
 
         except KeyError:
-            Logger.log_message_static(f"Signal '{signal}' not found in data_signals", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Signal '{signal}' not found in data_signals", Logger.ERROR)
         except Exception as e:
-            Logger.log_message_static(f"Error in PSD analysis: {str(e)}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Error in PSD analysis: {str(e)}", Logger.ERROR)
             import traceback
-            Logger.log_message_static(f"PSD analysis traceback: {traceback.format_exc()}", Logger.DEBUG)
+            Logger.log_message_static(f"Analysis-Dialog: PSD analysis traceback: {traceback.format_exc()}", Logger.DEBUG)
 
     def show_peak_detection(self):
         """
@@ -756,10 +756,10 @@ class SignalAnalysisDialog(QDialog):
         Automatically detects whether to analyze positive or negative peaks based on signal polarity.
         Visualizes detected peaks on the time-domain signal.
         """
-        Logger.log_message_static("Preparing peak detection analysis", Logger.INFO)
+        Logger.log_message_static("Analysis-Dialog: Preparing peak detection analysis", Logger.INFO)
         signal = self.get_selected_signal(self.adv_signal_combo)
         if not signal:
-            Logger.log_message_static("No signal selected for peak detection", Logger.WARNING)
+            Logger.log_message_static("Analysis-Dialog: No signal selected for peak detection", Logger.WARNING)
             return
 
         try:
@@ -771,7 +771,7 @@ class SignalAnalysisDialog(QDialog):
                 self.show_analysis_results("Peak Detection", signal, result)
                 return
 
-            Logger.log_message_static("Creating peak detection plot window", Logger.DEBUG)
+            Logger.log_message_static("Analysis-Dialog: Creating peak detection plot window", Logger.DEBUG)
             plot_window = QMainWindow(self)
             plot_window.setWindowTitle(f"Peak Detection: {signal}")
             plot_window.resize(800, 600)
@@ -818,10 +818,10 @@ class SignalAnalysisDialog(QDialog):
             }
 
             self.show_analysis_results("Peak Detection", signal, display_data)
-            Logger.log_message_static("Peak detection analysis complete", Logger.INFO)
+            Logger.log_message_static("Analysis-Dialog: Peak detection analysis complete", Logger.INFO)
 
         except Exception as e:
-            Logger.log_message_static(f"Error in peak detection: {str(e)}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Error in peak detection: {str(e)}", Logger.ERROR)
             import traceback
             Logger.log_message_static(traceback.format_exc(), Logger.DEBUG)
 
@@ -831,10 +831,10 @@ class SignalAnalysisDialog(QDialog):
 
         This method uses calculate_hilbert_analysis() and renders 4 linked subplots + summary.
         """
-        Logger.log_message_static("Preparing Hilbert transform analysis", Logger.INFO)
+        Logger.log_message_static("Analysis-Dialog: Preparing Hilbert transform analysis", Logger.INFO)
         signal = self.get_selected_signal(self.adv_signal_combo)
         if not signal:
-            Logger.log_message_static("No signal selected for Hilbert transform", Logger.WARNING)
+            Logger.log_message_static("Analysis-Dialog: No signal selected for Hilbert transform", Logger.WARNING)
             return
 
         try:
@@ -909,10 +909,10 @@ class SignalAnalysisDialog(QDialog):
             }
 
             self.show_analysis_results("Hilbert Transform", signal, summary)
-            Logger.log_message_static("Hilbert transform analysis complete", Logger.INFO)
+            Logger.log_message_static("Analysis-Dialog: Hilbert transform analysis complete", Logger.INFO)
 
         except Exception as e:
-            Logger.log_message_static(f"Error in Hilbert transform: {str(e)}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Error in Hilbert transform: {str(e)}", Logger.ERROR)
             import traceback
             Logger.log_message_static(traceback.format_exc(), Logger.DEBUG)
 
@@ -921,10 +921,10 @@ class SignalAnalysisDialog(QDialog):
         """
         Perform and display energy analysis including time/frequency domain energy and band distribution.
         """
-        Logger.log_message_static("Preparing energy analysis", Logger.INFO)
+        Logger.log_message_static("Analysis-Dialog: Preparing energy analysis", Logger.INFO)
         signal = self.get_selected_signal(self.adv_signal_combo)
         if not signal:
-            Logger.log_message_static("No signal selected for energy analysis", Logger.WARNING)
+            Logger.log_message_static("Analysis-Dialog: No signal selected for energy analysis", Logger.WARNING)
             return
 
         try:
@@ -992,10 +992,10 @@ class SignalAnalysisDialog(QDialog):
             })
 
             self.show_analysis_results("Energy Analysis", signal, summary)
-            Logger.log_message_static("Energy analysis complete", Logger.INFO)
+            Logger.log_message_static("Analysis-Dialog: Energy analysis complete", Logger.INFO)
 
         except Exception as e:
-            Logger.log_message_static(f"Error in energy analysis: {str(e)}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Error in energy analysis: {str(e)}", Logger.ERROR)
             import traceback
             Logger.log_message_static(traceback.format_exc(), Logger.DEBUG)
 
@@ -1003,10 +1003,10 @@ class SignalAnalysisDialog(QDialog):
         """
         Perform phase analysis using the Hilbert transform and display phase and velocity plots.
         """
-        Logger.log_message_static("Preparing phase analysis", Logger.INFO)
+        Logger.log_message_static("Analysis-Dialog: Preparing phase analysis", Logger.INFO)
         signal = self.get_selected_signal(self.adv_signal_combo)
         if not signal:
-            Logger.log_message_static("No signal selected for phase analysis", Logger.WARNING)
+            Logger.log_message_static("Analysis-Dialog: No signal selected for phase analysis", Logger.WARNING)
             return
 
         try:
@@ -1057,10 +1057,10 @@ class SignalAnalysisDialog(QDialog):
             stats = result["Phase Stats"]
             formatted_stats = {k: round(v, 4) for k, v in stats.items()}
             self.show_analysis_results("Phase Analysis", signal, formatted_stats)
-            Logger.log_message_static("Phase analysis complete", Logger.INFO)
+            Logger.log_message_static("Analysis-Dialog: Phase analysis complete", Logger.INFO)
 
         except Exception as e:
-            Logger.log_message_static(f"Error in phase analysis: {str(e)}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Error in phase analysis: {str(e)}", Logger.ERROR)
             import traceback
             Logger.log_message_static(traceback.format_exc(), Logger.DEBUG)
 
@@ -1068,10 +1068,10 @@ class SignalAnalysisDialog(QDialog):
         """
         GUI wrapper for cepstrum analysis. Displays original signal, log power spectrum and cepstrum.
         """
-        Logger.log_message_static("Preparing cepstrum analysis", Logger.INFO)
+        Logger.log_message_static("Analysis-Dialog: Preparing cepstrum analysis", Logger.INFO)
         signal = self.get_selected_signal(self.adv_signal_combo)
         if not signal:
-            Logger.log_message_static("No signal selected for cepstrum analysis", Logger.WARNING)
+            Logger.log_message_static("Analysis-Dialog: No signal selected for cepstrum analysis", Logger.WARNING)
             return
 
         try:
@@ -1153,21 +1153,21 @@ class SignalAnalysisDialog(QDialog):
                 summary[f"Peak {i + 1} Frequency"] = f"{freq:.2f} Hz"
 
             self.show_analysis_results("Cepstrum Analysis", signal, summary)
-            Logger.log_message_static("Cepstrum analysis complete", Logger.INFO)
+            Logger.log_message_static("Analysis-Dialog: Cepstrum analysis complete", Logger.INFO)
 
         except Exception as e:
-            Logger.log_message_static(f"Error in cepstrum analysis: {str(e)}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Error in cepstrum analysis: {str(e)}", Logger.ERROR)
             import traceback
-            Logger.log_message_static(f"Cepstrum traceback: {traceback.format_exc()}", Logger.DEBUG)
+            Logger.log_message_static(f"Analysis-Dialog: Cepstrum traceback: {traceback.format_exc()}", Logger.DEBUG)
 
     def show_autocorrelation_analysis(self):
         """
         GUI wrapper for autocorrelation analysis. Displays ACF plot and key time statistics.
         """
-        Logger.log_message_static("Preparing autocorrelation analysis", Logger.INFO)
+        Logger.log_message_static("Analysis-Dialog: Preparing autocorrelation analysis", Logger.INFO)
         signal = self.get_selected_signal(self.adv_signal_combo)
         if not signal:
-            Logger.log_message_static("No signal selected for autocorrelation", Logger.WARNING)
+            Logger.log_message_static("Analysis-Dialog: No signal selected for autocorrelation", Logger.WARNING)
             return
 
         try:
@@ -1212,24 +1212,24 @@ class SignalAnalysisDialog(QDialog):
             }
 
             self.show_analysis_results("Autocorrelation Analysis", signal, result_display)
-            Logger.log_message_static("Autocorrelation analysis complete", Logger.INFO)
+            Logger.log_message_static("Analysis-Dialog: Autocorrelation analysis complete", Logger.INFO)
 
         except Exception as e:
-            Logger.log_message_static(f"Error in autocorrelation analysis: {str(e)}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Error in autocorrelation analysis: {str(e)}", Logger.ERROR)
             import traceback
-            Logger.log_message_static(f"Autocorrelation traceback: {traceback.format_exc()}", Logger.DEBUG)
+            Logger.log_message_static(f"Analysis-Dialog: Autocorrelation traceback: {traceback.format_exc()}", Logger.DEBUG)
 
     def show_cross_correlation_analysis(self):
         """
         GUI wrapper to show cross-correlation analysis results between two selected signals.
         Computes correlation using `calculate_cross_correlation_analysis` and displays plots and statistics.
         """
-        Logger.log_message_static("Preparing cross-correlation analysis", Logger.INFO)
+        Logger.log_message_static("Analysis-Dialog: Preparing cross-correlation analysis", Logger.INFO)
         signal1 = self.get_selected_signal(self.cross_signal1_combo)
         signal2 = self.get_selected_signal(self.cross_signal2_combo)
 
         if not signal1 or not signal2:
-            Logger.log_message_static("Cannot perform cross-correlation: One or both signals not selected",
+            Logger.log_message_static("Analysis-Dialog: Cannot perform cross-correlation: One or both signals not selected",
                                       Logger.WARNING)
             return
 
@@ -1237,10 +1237,10 @@ class SignalAnalysisDialog(QDialog):
             time_arr1, values1 = self.parent.data_signals[signal1]
             time_arr2, values2 = self.parent.data_signals[signal2]
 
-            Logger.log_message_static(f"Computing cross-correlation between '{signal1}' and '{signal2}'", Logger.DEBUG)
+            Logger.log_message_static(f"Analysis-Dialog: Computing cross-correlation between '{signal1}' and '{signal2}'", Logger.DEBUG)
             results = calculate_cross_correlation_analysis(self, time_arr1, values1, time_arr2, values2)
             if results is None:
-                Logger.log_message_static("Cross-correlation analysis aborted", Logger.INFO)
+                Logger.log_message_static("Analysis-Dialog: Cross-correlation analysis aborted", Logger.INFO)
                 return
 
             lags = results["Lags (s)"]
@@ -1300,7 +1300,7 @@ class SignalAnalysisDialog(QDialog):
             plot_window.show()
 
             self._plot_windows.append(plot_window)
-            Logger.log_message_static("Cross-correlation plot window displayed successfully", Logger.INFO)
+            Logger.log_message_static("Analysis-Dialog: Cross-correlation plot window displayed successfully", Logger.INFO)
 
             # Prepare stats for display
             display_stats = {
@@ -1314,23 +1314,23 @@ class SignalAnalysisDialog(QDialog):
                     display_stats[key] = f"{results[key]} s" if isinstance(results[key], float) else results[key]
 
             self.show_analysis_results("Cross-Correlation Analysis", f"{signal1} & {signal2}", display_stats)
-            Logger.log_message_static("Cross-correlation analysis complete", Logger.INFO)
+            Logger.log_message_static("Analysis-Dialog: Cross-correlation analysis complete", Logger.INFO)
 
         except KeyError as ke:
-            Logger.log_message_static(f"Signal not found in data_signals: {str(ke)}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Signal not found in data_signals: {str(ke)}", Logger.ERROR)
         except Exception as e:
-            Logger.log_message_static(f"Error in cross-correlation analysis: {str(e)}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Error in cross-correlation analysis: {str(e)}", Logger.ERROR)
             import traceback
-            Logger.log_message_static(f"Traceback: {traceback.format_exc()}", Logger.DEBUG)
+            Logger.log_message_static(f"Analysis-Dialog: Traceback: {traceback.format_exc()}", Logger.DEBUG)
 
     def show_wavelet_dialog(self):
         """
         Show wavelet analysis parameter dialog, run wavelet analysis (CWT or DWT), and display results.
         """
-        Logger.log_message_static("Opening wavelet analysis dialog", Logger.INFO)
+        Logger.log_message_static("Analysis-Dialog: Opening wavelet analysis dialog", Logger.INFO)
         signal = self.get_selected_signal(self.adv_signal_combo)
         if not signal:
-            Logger.log_message_static("No signal selected for wavelet analysis", Logger.WARNING)
+            Logger.log_message_static("Analysis-Dialog: No signal selected for wavelet analysis", Logger.WARNING)
             return
 
         try:
@@ -1386,25 +1386,25 @@ class SignalAnalysisDialog(QDialog):
                 plot_window.show()
 
                 self._plot_windows.append(plot_window)
-                Logger.log_message_static("CWT image plot displayed", Logger.INFO)
+                Logger.log_message_static("Analysis-Dialog: CWT image plot displayed", Logger.INFO)
 
-            Logger.log_message_static("Wavelet analysis complete", Logger.INFO)
+            Logger.log_message_static("Analysis-Dialog: Wavelet analysis complete", Logger.INFO)
 
         except KeyError:
-            Logger.log_message_static(f"Signal '{signal}' not found", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Signal '{signal}' not found", Logger.ERROR)
         except Exception as e:
-            Logger.log_message_static(f"Wavelet analysis failed: {str(e)}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Wavelet analysis failed: {str(e)}", Logger.ERROR)
             import traceback
-            Logger.log_message_static(f"Traceback: {traceback.format_exc()}", Logger.DEBUG)
+            Logger.log_message_static(f"Analysis-Dialog: Traceback: {traceback.format_exc()}", Logger.DEBUG)
 
     def show_filter_dialog(self):
         """
         Show filter configuration dialog and display filtered signal using IIR or FIR.
         """
-        Logger.log_message_static("Opening filter dialog", Logger.INFO)
+        Logger.log_message_static("Analysis-Dialog: Opening filter dialog", Logger.INFO)
         signal = self.get_selected_signal(self.adv_signal_combo)
         if not signal:
-            Logger.log_message_static("No signal selected for filtering", Logger.WARNING)
+            Logger.log_message_static("Analysis-Dialog: No signal selected for filtering", Logger.WARNING)
             return
 
         try:
@@ -1465,7 +1465,7 @@ class SignalAnalysisDialog(QDialog):
             layout.addWidget(buttons)
 
             if not dialog.exec():
-                Logger.log_message_static("Filter dialog cancelled by user", Logger.INFO)
+                Logger.log_message_static("Analysis-Dialog: Filter dialog cancelled by user", Logger.INFO)
                 return
 
             # --- Retrieve settings ---
@@ -1527,12 +1527,12 @@ class SignalAnalysisDialog(QDialog):
             plot_window.show()
             self._plot_windows.append(plot_window)
 
-            Logger.log_message_static("Filter result displayed", Logger.INFO)
+            Logger.log_message_static("Analysis-Dialog: Filter result displayed", Logger.INFO)
 
         except KeyError:
-            Logger.log_message_static(f"Signal '{signal}' not found", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Signal '{signal}' not found", Logger.ERROR)
         except Exception as e:
-            Logger.log_message_static(f"Error in filter dialog: {e}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Error in filter dialog: {e}", Logger.ERROR)
             import traceback
             Logger.log_message_static(traceback.format_exc(), Logger.DEBUG)
 
@@ -1558,7 +1558,7 @@ class SignalAnalysisDialog(QDialog):
         from utils.logger import Logger
 
         try:
-            Logger.log_message_static(f"Filter config: {filter_type}, {filter_method.upper()}"
+            Logger.log_message_static(f"Analysis-Dialog: Filter config: {filter_type}, {filter_method.upper()}"
                                       f"{' (Butterworth)' if filter_method == 'iir' else ''}, "
                                       f"cutoff={cutoff_freq}, "
                                       f"{'order' if filter_method == 'iir' else 'taps'}="
@@ -1576,11 +1576,11 @@ class SignalAnalysisDialog(QDialog):
             elif filter_method.lower() == "fir":
                 result = calculate_fir_filter(processed_values, time_arr, filter_type, cutoff_freq, numtaps, window)
             else:
-                Logger.log_message_static(f"Unknown filter method: {filter_method}", Logger.ERROR)
+                Logger.log_message_static(f"Analysis-Dialog: Unknown filter method: {filter_method}", Logger.ERROR)
                 return None
 
             if result is None:
-                Logger.log_message_static("Filtering failed", Logger.ERROR)
+                Logger.log_message_static("Analysis-Dialog: Filtering failed", Logger.ERROR)
                 return None
 
             # Extract filtered signal for the result
@@ -1600,21 +1600,21 @@ class SignalAnalysisDialog(QDialog):
             }
 
         except Exception as e:
-            Logger.log_message_static(f"Error in filter application: {str(e)}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Dialog: Error in filter application: {str(e)}", Logger.ERROR)
             import traceback
             Logger.log_message_static(traceback.format_exc(), Logger.DEBUG)
             return None
 
     def show_analysis_results(self, title, signal_name, data_dict):
         """Display analysis results in a table in the results area."""
-        Logger.log_message_static(f"Displaying {title} results for {signal_name}", Logger.DEBUG)
+        Logger.log_message_static(f"Analysis-Dialog: Displaying {title} results for {signal_name}", Logger.DEBUG)
         self.clear_results()
 
         # Create title
         result_title = QLabel(f"{title} Results: {signal_name}")
         result_title.setStyleSheet("font-weight: bold; font-size: 14px;")
         self.results_layout.addWidget(result_title)
-        Logger.log_message_static(f"Added results title: {title} for {signal_name}", Logger.DEBUG)
+        Logger.log_message_static(f"Analysis-Dialog: Added results title: {title} for {signal_name}", Logger.DEBUG)
 
         # Create table
         table = QTableWidget()
@@ -1627,20 +1627,20 @@ class SignalAnalysisDialog(QDialog):
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
 
-        Logger.log_message_static(f"Creating results table with {len(data_dict)} rows", Logger.DEBUG)
+        Logger.log_message_static(f"Analysis-Dialog: Creating results table with {len(data_dict)} rows", Logger.DEBUG)
 
         # Populate table
         for i, (key, value) in enumerate(data_dict.items()):
             table.setItem(i, 0, QTableWidgetItem(key))
             table.setItem(i, 1, QTableWidgetItem(str(value)))
-            Logger.log_message_static(f"Added table row: {key} = {value}", Logger.DEBUG)
+            Logger.log_message_static(f"Analysis-Dialog: Added table row: {key} = {value}", Logger.DEBUG)
 
         self.results_layout.addWidget(table)
-        Logger.log_message_static("Analysis results displayed successfully", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Dialog: Analysis results displayed successfully", Logger.DEBUG)
 
     def show_help_in_results(self, topic, content):
         """Display help information in the results area."""
-        Logger.log_message_static(f"Displaying help for: {topic}", Logger.DEBUG)
+        Logger.log_message_static(f"Analysis-Dialog: Displaying help for: {topic}", Logger.DEBUG)
         self.clear_results()
 
         # Create title
@@ -1655,7 +1655,7 @@ class SignalAnalysisDialog(QDialog):
         text_widget.setMinimumHeight(300)
         self.results_layout.addWidget(text_widget)
 
-        Logger.log_message_static(f"Help content for '{topic}' displayed successfully", Logger.DEBUG)
+        Logger.log_message_static(f"Analysis-Dialog: Help content for '{topic}' displayed successfully", Logger.DEBUG)
 
 
 def show_analysis_dialog(parent):
@@ -1668,15 +1668,15 @@ def show_analysis_dialog(parent):
         parent: The parent application that has the data_signals attribute
                containing the signal data.
     """
-    Logger.log_message_static("Opening Signal Analysis Dialog", Logger.INFO)
+    Logger.log_message_static("Analysis-Dialog: Opening Signal Analysis Dialog", Logger.INFO)
     try:
         dialog = SignalAnalysisDialog(parent)
         dialog.exec()
-        Logger.log_message_static("Signal Analysis Dialog closed", Logger.INFO)
+        Logger.log_message_static("Analysis-Dialog: Signal Analysis Dialog closed", Logger.INFO)
     except Exception as e:
-        Logger.log_message_static(f"Error in signal analysis dialog: {str(e)}", Logger.ERROR)
+        Logger.log_message_static(f"Analysis-Dialog: Error in signal analysis dialog: {str(e)}", Logger.ERROR)
         import traceback
-        Logger.log_message_static(f"Signal analysis dialog traceback: {traceback.format_exc()}", Logger.DEBUG)
+        Logger.log_message_static(f"Analysis-Dialog: Signal analysis dialog traceback: {traceback.format_exc()}", Logger.DEBUG)
 
 def add_explanation_group(layout, title, text):
     """
@@ -1687,7 +1687,7 @@ def add_explanation_group(layout, title, text):
         title (str): Title of the explanation group
         text (str): Explanation text
     """
-    Logger.log_message_static(f"Adding explanation group: {title}", Logger.DEBUG)
+    Logger.log_message_static(f"Analysis-Dialog: Adding explanation group: {title}", Logger.DEBUG)
     group = QGroupBox(title)
     group.setCheckable(True)
     group.setChecked(False)  # Start collapsed
@@ -1700,7 +1700,7 @@ def add_explanation_group(layout, title, text):
     group_layout.addWidget(text_edit)
 
     layout.addWidget(group)
-    Logger.log_message_static(f"Added explanation group for: {title}", Logger.DEBUG)
+    Logger.log_message_static(f"Analysis-Dialog: Added explanation group for: {title}", Logger.DEBUG)
 
 
 

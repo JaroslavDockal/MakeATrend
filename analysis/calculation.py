@@ -40,11 +40,11 @@ def calculate_basic_statistics(dialog, values):
         results["Skewness"] = float(stats.skew(processed_values)) if std > 0 else 0.0
         results["Kurtosis"] = float(stats.kurtosis(processed_values)) if std > 0 else 0.0
 
-        Logger.log_message_static("Basic statistics computed successfully", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Calculation: Basic statistics computed successfully", Logger.DEBUG)
         return results
 
     except Exception as e:
-        Logger.log_message_static(f"Error computing statistics: {str(e)}", Logger.ERROR)
+        Logger.log_message_static(f"Analysis-Calculation: Error computing statistics: {str(e)}", Logger.ERROR)
         return None
 
 def calculate_fft_analysis(dialog, time_arr, values):
@@ -94,7 +94,7 @@ def calculate_fft_analysis(dialog, time_arr, values):
         "Total Energy (Freq Domain)": float(np.sum(magnitude**2))
     }
 
-    Logger.log_message_static("FFT analysis completed", Logger.DEBUG)
+    Logger.log_message_static("Analysis-Calculation: FFT analysis completed", Logger.DEBUG)
     return results
 
 def calculate_time_domain_analysis(dialog, time_arr, values):
@@ -145,7 +145,7 @@ def calculate_time_domain_analysis(dialog, time_arr, values):
     results["RMS"] = float(rms)
     results["Crest Factor"] = float(peak_amplitude / rms) if rms > 0 else np.inf
 
-    Logger.log_message_static("Time-domain analysis completed", Logger.DEBUG)
+    Logger.log_message_static("Analysis-Calculation: Time-domain analysis completed", Logger.DEBUG)
     return results
 
 def calculate_psd_analysis(dialog, time_arr, values):
@@ -160,7 +160,7 @@ def calculate_psd_analysis(dialog, time_arr, values):
     Returns:
         dict or None: Dictionary containing frequency axis, PSD, and power metrics.
     """
-    Logger.log_message_static("Starting PSD calculation (modular)", Logger.INFO)
+    Logger.log_message_static("Analysis-Calculation: Starting PSD calculation (modular)", Logger.INFO)
     processed_values = safe_prepare_signal(values, dialog, "PSD Analysis")
     if processed_values is None:
         return None
@@ -204,7 +204,7 @@ def calculate_psd_analysis(dialog, time_arr, values):
         "RMS Amplitude": rms_power
     }
 
-    Logger.log_message_static("PSD analysis completed", Logger.DEBUG)
+    Logger.log_message_static("Analysis-Calculation: PSD analysis completed", Logger.DEBUG)
     return results
 
 def calculate_peak_detection(dialog, time_arr, values):
@@ -233,11 +233,11 @@ def calculate_peak_detection(dialog, time_arr, values):
     if np.all(processed_values < 0) or (
         np.any(processed_values < 0) and abs(np.min(processed_values) - signal_mean) > abs(np.max(processed_values) - signal_mean)):
         peak_type = "Negative"
-        Logger.log_message_static("Signal is predominantly negative, inverting to detect valleys", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Calculation: Signal is predominantly negative, inverting to detect valleys", Logger.DEBUG)
         processed = -processed_values
     else:
         peak_type = "Positive"
-        Logger.log_message_static("Signal is predominantly positive or mixed, detecting peaks", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Calculation: Signal is predominantly positive or mixed, detecting peaks", Logger.DEBUG)
         processed = processed_values
 
     peak_indices, _ = sc_signal.find_peaks(processed)
@@ -263,7 +263,7 @@ def calculate_peak_detection(dialog, time_arr, values):
         "Min Height": float(np.min(heights)) if len(heights) > 0 else 0,
         "Mean Width": float(np.mean(widths)) if len(widths) > 0 else 0,
     }
-    Logger.log_message_static(f"Peak detection finished: {results['Count']} peaks found", Logger.DEBUG)
+    Logger.log_message_static(f"Analysis-Calculation: Peak detection finished: {results['Count']} peaks found", Logger.DEBUG)
     return results
 
 def calculate_hilbert_analysis(dialog, time_arr, values):
@@ -312,7 +312,7 @@ def calculate_hilbert_analysis(dialog, time_arr, values):
         "Phase Range (rad)": float(np.max(phase) - np.min(phase))
     }
 
-    Logger.log_message_static("Hilbert analysis completed", Logger.DEBUG)
+    Logger.log_message_static("Analysis-Calculation: Hilbert analysis completed", Logger.DEBUG)
     return results
 
 def calculate_energy_analysis(dialog, time_arr, values):
@@ -392,7 +392,7 @@ def calculate_energy_analysis(dialog, time_arr, values):
         "Band Percentages": band_percentages
     }
 
-    Logger.log_message_static("Energy analysis completed", Logger.DEBUG)
+    Logger.log_message_static("Analysis-Calculation: Energy analysis completed", Logger.DEBUG)
     return results
 
 def calculate_phase_analysis(dialog, time_arr, values):
@@ -441,7 +441,7 @@ def calculate_phase_analysis(dialog, time_arr, values):
         }
     }
 
-    Logger.log_message_static("Phase analysis completed", Logger.DEBUG)
+    Logger.log_message_static("Analysis-Calculation: Phase analysis completed", Logger.DEBUG)
     return result
 
 def calculate_cepstrum_analysis(dialog, time_arr, values):
@@ -510,7 +510,7 @@ def calculate_cepstrum_analysis(dialog, time_arr, values):
         "Mean Cepstrum Value": float(np.mean(search_range))
     }
 
-    Logger.log_message_static("Cepstrum analysis completed", Logger.DEBUG)
+    Logger.log_message_static("Analysis-Calculation: Cepstrum analysis completed", Logger.DEBUG)
     return result
 
 def calculate_autocorrelation_analysis(dialog, time_arr, values):
@@ -569,7 +569,7 @@ def calculate_autocorrelation_analysis(dialog, time_arr, values):
         "Peak Correlation": 1.0
     }
 
-    Logger.log_message_static("Autocorrelation analysis calculated", Logger.DEBUG)
+    Logger.log_message_static("Analysis-Calculation: Autocorrelation analysis calculated", Logger.DEBUG)
     return result
 
 def calculate_cross_correlation_analysis(dialog, time_arr1, values1, time_arr2, values2):
@@ -635,7 +635,7 @@ def calculate_cross_correlation_analysis(dialog, time_arr1, values1, time_arr2, 
         **threshold_lags
     }
 
-    Logger.log_message_static("Extended cross-correlation analysis completed", Logger.DEBUG)
+    Logger.log_message_static("Analysis-Calculation: Extended cross-correlation analysis completed", Logger.DEBUG)
     return results
 
 def calculate_wavelet_analysis_cwt(dialog, time_arr, values, wavelet_name="cmor1.5-1.0", num_scales=32):
@@ -694,7 +694,7 @@ def calculate_wavelet_analysis_cwt(dialog, time_arr, values, wavelet_name="cmor1
         }
 
     except Exception as e:
-        Logger.log_message_static(f"Wavelet CWT analysis failed: {e}", Logger.ERROR)
+        Logger.log_message_static(f"Analysis-Calculation: Wavelet CWT analysis failed: {e}", Logger.ERROR)
         return None
 
 def calculate_wavelet_analysis_dwt(dialog, time_arr, values, wavelet_name="db4", num_levels=5):
@@ -731,11 +731,11 @@ def calculate_wavelet_analysis_dwt(dialog, time_arr, values, wavelet_name="db4",
         results["Wavelet Type"] = wavelet_name
         results["Decomposition Level"] = level
 
-        Logger.log_message_static("Wavelet DWT analysis completed", Logger.DEBUG)
+        Logger.log_message_static("Analysis-Calculation: Wavelet DWT analysis completed", Logger.DEBUG)
         return results
 
     except Exception as e:
-        Logger.log_message_static(f"Wavelet DWT analysis failed: {e}", Logger.ERROR)
+        Logger.log_message_static(f"Analysis-Calculation: Wavelet DWT analysis failed: {e}", Logger.ERROR)
         return None
 
 def calculate_iir_filter(values, time_arr, filter_type="lowpass", cutoff_freq=1.0, order=4):
@@ -754,7 +754,7 @@ def calculate_iir_filter(values, time_arr, filter_type="lowpass", cutoff_freq=1.
     """
     sample_rate = safe_sample_rate(time_arr)
     if sample_rate == 0.0:
-        Logger.log_message_static("Invalid sampling rate", Logger.ERROR)
+        Logger.log_message_static("Analysis-Calculation: Invalid sampling rate", Logger.ERROR)
         return None
 
     nyquist = 0.5 * sample_rate
@@ -764,12 +764,12 @@ def calculate_iir_filter(values, time_arr, filter_type="lowpass", cutoff_freq=1.
             b, a = sc_signal.butter(order, norm_cutoff, btype=filter_type)
         elif filter_type in ["bandpass", "bandstop"]:
             if not isinstance(cutoff_freq, (list, tuple)) or len(cutoff_freq) != 2:
-                Logger.log_message_static("Band filters require two cutoff frequencies", Logger.ERROR)
+                Logger.log_message_static("Analysis-Calculation: Band filters require two cutoff frequencies", Logger.ERROR)
                 return None
             norm_cutoff = [f / nyquist for f in cutoff_freq]
             b, a = sc_signal.butter(order, norm_cutoff, btype=filter_type)
         else:
-            Logger.log_message_static(f"Unsupported filter type: {filter_type}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Calculation: Unsupported filter type: {filter_type}", Logger.ERROR)
             return None
 
         filtered = sc_signal.filtfilt(b, a, values)
@@ -782,7 +782,7 @@ def calculate_iir_filter(values, time_arr, filter_type="lowpass", cutoff_freq=1.
         }
 
     except Exception as e:
-        Logger.log_message_static(f"IIR filtering error: {e}", Logger.ERROR)
+        Logger.log_message_static(f"Analysis-Calculation: IIR filtering error: {e}", Logger.ERROR)
         return None
 
 def calculate_fir_filter(values, time_arr, filter_type="lowpass", cutoff_freq=1.0,
@@ -803,7 +803,7 @@ def calculate_fir_filter(values, time_arr, filter_type="lowpass", cutoff_freq=1.
     """
     sample_rate = safe_sample_rate(time_arr)
     if sample_rate == 0.0:
-        Logger.log_message_static("Invalid sampling rate", Logger.ERROR)
+        Logger.log_message_static("Analysis-Calculation: Invalid sampling rate", Logger.ERROR)
         return None
 
     nyquist = 0.5 * sample_rate
@@ -815,14 +815,14 @@ def calculate_fir_filter(values, time_arr, filter_type="lowpass", cutoff_freq=1.
                                        pass_zero=(filter_type == "lowpass"))
         elif filter_type in ["bandpass", "bandstop"]:
             if not isinstance(cutoff_freq, (list, tuple)) or len(cutoff_freq) != 2:
-                Logger.log_message_static("Band filters require two cutoff frequencies", Logger.ERROR)
+                Logger.log_message_static("Analysis-Calculation: Band filters require two cutoff frequencies", Logger.ERROR)
                 return None
             norm_cutoff = [f / nyquist for f in cutoff_freq]
             fir_coeffs = sc_signal.firwin(numtaps, norm_cutoff,
                                        window=window,
                                        pass_zero=(filter_type == "bandstop"))
         else:
-            Logger.log_message_static(f"Unsupported filter type: {filter_type}", Logger.ERROR)
+            Logger.log_message_static(f"Analysis-Calculation: Unsupported filter type: {filter_type}", Logger.ERROR)
             return None
 
         filtered = sc_signal.filtfilt(fir_coeffs, [1.0], values)
@@ -836,7 +836,7 @@ def calculate_fir_filter(values, time_arr, filter_type="lowpass", cutoff_freq=1.
         }
 
     except Exception as e:
-        Logger.log_message_static(f"FIR filtering error: {e}", Logger.ERROR)
+        Logger.log_message_static(f"Analysis-Calculation: FIR filtering error: {e}", Logger.ERROR)
         return None
 
 

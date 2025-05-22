@@ -27,10 +27,10 @@ class SignalColors:
         Initializes a Glasbey-like base palette with 50 highly distinct colors.
         """
         if cls._initialized:
-            Logger.log_message_static("SignalColors already initialized", Logger.DEBUG)
+            Logger.log_message_static("Utils-Colors: SignalColors already initialized", Logger.DEBUG)
             return
 
-        Logger.log_message_static("Initializing Glasbey base palette", Logger.INFO)
+        Logger.log_message_static("Utils-Colors: Initializing Glasbey base palette", Logger.INFO)
         base_colors = get_colors(50)
         for idx, color in enumerate(base_colors):
             hex_color = cls._rgb_to_hex(color)
@@ -47,16 +47,16 @@ class SignalColors:
         if name in cls._color_map:
             return cls._color_map[name]
 
-        Logger.log_message_static(f"Assigning new color to '{name}'", Logger.DEBUG)
+        Logger.log_message_static(f"Utils-Colors: Assigning new color to '{name}'", Logger.DEBUG)
         try:
             new_color = cls._generate_distinct_color()
             cls._used_colors.append(new_color)
             hex_color = cls._rgb_to_hex(new_color)
             cls._color_map[name] = hex_color
-            Logger.log_message_static(f"Color assigned to '{name}': {hex_color}", Logger.DEBUG)
+            Logger.log_message_static(f"Utils-Colors: Color assigned to '{name}': {hex_color}", Logger.DEBUG)
             return hex_color
         except Exception as e:
-            Logger.log_message_static(f"Color assignment failed for '{name}': {e}", Logger.ERROR)
+            Logger.log_message_static(f"Utils-Colors: Color assignment failed for '{name}': {e}", Logger.ERROR)
             return cls._fallback_color
 
     @staticmethod
@@ -73,7 +73,7 @@ class SignalColors:
         Generate a color maximally distinct from _used_colors using Glasbey-style distance metric,
         and reject too-dark candidates (unsuitable for dark background).
         """
-        Logger.log_message_static("Generating distinct color (with brightness check)...", Logger.DEBUG)
+        Logger.log_message_static("Utils-Colors: Generating distinct color (with brightness check)...", Logger.DEBUG)
 
         # Sample candidate space
         for attempt in range(5):  # up to 5 attempts to find a valid color
@@ -87,7 +87,7 @@ class SignalColors:
             candidates = np.array([c for c in candidates if luminance(c) >= 0.25])
 
             if len(candidates) == 0:
-                Logger.log_message_static("All candidates filtered out (too dark), retrying...", Logger.WARNING)
+                Logger.log_message_static("Utils-Colors: All candidates filtered out (too dark), retrying...", Logger.WARNING)
                 continue
 
             used = np.array(cls._used_colors)
@@ -99,8 +99,8 @@ class SignalColors:
 
             best_idx = np.argmax(dists)
             best_color = tuple(candidates[best_idx])
-            Logger.log_message_static(f"New distinct color selected: {cls._rgb_to_hex(best_color)}", Logger.DEBUG)
+            Logger.log_message_static(f"Utils-Colors: New distinct color selected: {cls._rgb_to_hex(best_color)}", Logger.DEBUG)
             return best_color
 
-        Logger.log_message_static("Failed to find suitable color after filtering, returning fallback", Logger.ERROR)
+        Logger.log_message_static("Utils-Colors: Failed to find suitable color after filtering, returning fallback", Logger.ERROR)
         return (1.0, 0.0, 0.0)  # fallback = bright red
