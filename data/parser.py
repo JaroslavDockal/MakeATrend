@@ -105,6 +105,14 @@ def parse_csv_file(path):
                 format='%Y-%m-%d %H:%M:%S.%f',
                 errors='coerce'
             )
+            # TODO Make it more benevolent = different time formats
+            if df['Timestamp'].isna().sum() > 0:
+                Logger.log_message_static("Data-Parser: Error parsing timestamps, trying without miliseconds", Logger.DEBUG)
+                df['Timestamp'] = pd.to_datetime(
+                    df['Date'] + ' ' + df['Time'].str.replace(',', '.', regex=False),
+                    format='%Y-%m-%d %H:%M:%S',
+                    errors='coerce'
+                )
             Logger.log_message_static("Data-Parser: Successfully parsed timestamps", Logger.DEBUG)
         except Exception as e:
             Logger.log_message_static(f"Data-Parser: Error parsing timestamps: {str(e)}, trying flexible parsing", Logger.WARNING)
