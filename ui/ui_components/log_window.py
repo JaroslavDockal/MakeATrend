@@ -47,7 +47,7 @@ class LogWindow(QDialog):
 
         self.message_buffer = []
 
-    def add_message(self, message, level=INFO):
+    def add_message(self, message, level=INFO, logLevel=5):
         """
         Add a message to the log view or buffer if the window is not visible.
 

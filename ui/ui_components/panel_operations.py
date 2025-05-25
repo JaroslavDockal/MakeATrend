@@ -85,6 +85,30 @@ def toggle_grid(self, state: bool):
     self.log_message(f"Components-PanelOp: Grid lines {'shown' if state else 'hidden'}", self.DEBUG)
     self.plot_widget.showGrid(x=state, y=state)
 
+def toggle_background(self, use_white: bool):
+    """
+    Switch plot background.
+
+    Args:
+        use_white (bool): True = white background, False = black.
+    """
+    self.log_message(f"Components-PanelOp: Graph background set to {'white' if use_white else 'black'}", self.DEBUG)
+    if use_white:
+        self.plot_widget.setBackground('w')
+    else:
+        self.plot_widget.setBackground('k')
+
+def toggle_axis_scale(self, log_scale: bool):
+    """
+    Switch between logaritmic and decimal scale.
+
+    Args:
+        log_scale (bool): True = log scale, False = decimal scale.
+    """
+    self.log_message(f"Components-PanelOp: Axis scale set to {'logaritmic' if log_scale else 'decimal'}", self.DEBUG)
+    #TODO Jde to nějak jednoduše mucknout?
+    self.log_message(f"Components-PanelOp: Attempted to set Axis scale. Nice try, but this does not work yet :-)", self.WARNING)
+    self.plot_widget.getPlotItem().setLogMode(log_scale)
 
 def toggle_cursor(self, cursor, state):
     """

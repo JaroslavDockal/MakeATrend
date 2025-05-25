@@ -141,7 +141,7 @@ class SignalViewer(QMainWindow):
     from .ui_components.panel_operations import (
         toggle_complex_mode, toggle_right_panel, toggle_cursor_info_mode,
         toggle_crosshair, toggle_grid, toggle_cursor, update_cursor_info,
-        toggle_log_window
+        toggle_log_window, toggle_background, toggle_axis_scale
     )
 
     from .ui_components.signal_operations import (

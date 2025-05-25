@@ -84,6 +84,12 @@ def setup_checkboxes(viewer, layout):
     col1 = QVBoxLayout()
     col2 = QVBoxLayout()
 
+    viewer.white_background_chk = QCheckBox("White Background")
+    viewer.white_background_chk.setChecked(False)
+    viewer.white_background_chk.toggled.connect(viewer.toggle_background)
+    viewer.white_background_chk.setToolTip("Switch to white/black scale for better printouts")
+    col1.addWidget(viewer.white_background_chk)
+
     viewer.toggle_grid_chk = QCheckBox("Show Grid")
     viewer.toggle_grid_chk.setChecked(True)
     viewer.toggle_grid_chk.toggled.connect(viewer.toggle_grid)
@@ -104,6 +110,13 @@ def setup_checkboxes(viewer, layout):
     viewer.downsample_chk.setChecked(False)
     viewer.downsample_chk.setToolTip("Reduce data points for better performance with large datasets")
     col1.addWidget(viewer.downsample_chk)
+
+    #TODO not working - might be used for something else. Leave as placeholder
+    viewer.log_scale_chk = QCheckBox("Logaritmic Scale")
+    viewer.log_scale_chk.setChecked(False)
+    viewer.log_scale_chk.toggled.connect(viewer.toggle_axis_scale)
+    viewer.log_scale_chk.setToolTip("Switch to axis logaritmic/Decimal format.")
+    col2.addWidget(viewer.log_scale_chk)
 
     viewer.toggle_crosshair_chk = QCheckBox("Show Crosshair")
     viewer.toggle_crosshair_chk.toggled.connect(viewer.toggle_crosshair)
