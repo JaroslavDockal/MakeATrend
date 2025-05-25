@@ -27,11 +27,6 @@ def build_signal_row(self, name):
     cb = QCheckBox(name)
     cb.stateChanged.connect(self.toggle_signal)
 
-    axis_cb = QComboBox()
-    axis_cb.addItems(['Left', 'Right'])
-    axis_cb.setVisible(False)
-
-    # Použití SignalColors pro konzistentní barvu
     signal_color = SignalColors.get_color_for_name(name)
 
     color_btn = QPushButton("Color")
@@ -43,6 +38,10 @@ def build_signal_row(self, name):
     width_spin.setRange(1, 10)
     width_spin.setValue(2)
     width_spin.setVisible(False)
+
+    axis_cb = QComboBox()
+    axis_cb.addItems(['Left', 'Right'])
+    axis_cb.setVisible(False)
 
     row_layout.addWidget(cb)
     row_layout.addWidget(axis_cb)
