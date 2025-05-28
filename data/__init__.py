@@ -28,7 +28,6 @@ of signal data from initial file loading through processing to persistence.
 
 # Export submodule functionality
 from .loader import load_single_file, load_multiple_files
-from .parser import parse_csv_or_recorder
 from .csv_dialect import ParseOptions, ParseOptionsDialog, detect_csv_dialect
 from .project import save_project_state, load_project_state
 
@@ -37,11 +36,6 @@ __all__ = [
     # Loader functions
     'load_single_file',
     'load_multiple_files',
-
-    # Signal utilities
-    'parse_csv_or_recorder',
-    'is_digital_signal',
-    'find_nearest_index',
 
     # CSV parsing
     'ParseOptions',

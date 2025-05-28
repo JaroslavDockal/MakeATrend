@@ -18,7 +18,7 @@ This module provides core data manipulation functionality for signal processing:
 
 The module serves as a foundation for the application's data processing pipeline,
 providing low-level utilities that are used by higher-level modules like loader.py
-and parser.py.
+and parser_*.py.
 
 Functions:
     find_nearest_index: Locate the closest value in an array
