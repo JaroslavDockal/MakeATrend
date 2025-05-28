@@ -60,9 +60,10 @@ def is_digital_signal(arr):
     """
     Determines whether a signal is digital (boolean-like).
 
-    A signal is considered digital if it only contains values like:
-    - 'TRUE' / 'FALSE' (case-insensitive)
-    - Not numeric 0/1, to avoid misclassification of analog signals
+    A signal is considered digital if it:
+    - Has boolean dtype (from astype(bool))
+    - Contains 'TRUE' / 'FALSE' (case-insensitive) string values
+    - Contains only 0/1 values
 
     Args:
         arr: NumPy array or tuple of (time_array, values_array)
@@ -94,6 +95,11 @@ def is_digital_signal(arr):
         return False
 
     try:
+        # Check if the array has boolean dtype (from astype(bool))
+        if arr.dtype == np.bool_ or arr.dtype == bool:
+            Logger.log_message_static("Data-Signal: Signal has boolean dtype, classified as digital", Logger.DEBUG)
+            return True
+
         # Check for boolean-like strings
         if arr.dtype == object:
             Logger.log_message_static("Data-Signal: Signal has object dtype, checking for TRUE/FALSE values", Logger.DEBUG)
@@ -107,7 +113,7 @@ def is_digital_signal(arr):
         # Check for numeric values (e.g., 0/1)
         elif np.issubdtype(arr.dtype, np.number):
             unique_vals = np.unique(arr[~np.isnan(arr)])
-            if len(unique_vals) == 2 and set(unique_vals).issubset({0, 1}):
+            if len(unique_vals) <= 2 and set(unique_vals).issubset({0, 1}):
                 Logger.log_message_static(f"Data-Signal: Signal classified as digital with numeric values: {unique_vals}",
                                           Logger.INFO)
                 return True

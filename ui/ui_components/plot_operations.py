@@ -6,7 +6,7 @@ import pyqtgraph as pg
 
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QCheckBox, QComboBox, QPushButton, QSpinBox, QColorDialog
 
-from data.signal_utils import is_digital_signal
+from ui.widgets.signal_utils import is_digital_signal
 from utils.signal_colors import SignalColors
 
 

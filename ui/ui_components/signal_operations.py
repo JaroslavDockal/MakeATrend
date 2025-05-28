@@ -3,7 +3,7 @@ Signal operations including virtual signals and graph export for the CSV Signal 
 """
 from PySide6.QtWidgets import QMessageBox, QFileDialog
 
-from data.graph_export import export_graph
+from utils.graph_export import export_graph
 from analysis.analysis_dialog import show_analysis_dialog
 
 
@@ -24,38 +24,76 @@ def add_virtual_signal(self):
 
     from ui.widgets.virtual_signal_dialog import VirtualSignalDialog
     dialog = VirtualSignalDialog(signal_names, self)
+
     if dialog.exec():
-        signal_name, expression, alias_mapping = dialog.get_result()
+        result = dialog.get_result()
 
-        if expression.strip() == "":
-            self.log_message("Components-SignalOp: Empty expression provided for virtual signal", self.WARNING)
-            return
+        # Handle bit decomposition mode (returns a list of signal configurations)
+        if isinstance(result, list):
+            self.log_message(f"Components-SignalOp: Processing {len(result)} bit signals", self.DEBUG)
 
-        try:
-            # Use the dedicated compute_virtual_signal function from virtual_signal_dialog
-            from ui.widgets.virtual_signal_dialog import compute_virtual_signal
+            for bit_name, bit_unit, bit_expr, bit_mapping in result:
+                try:
+                    # Use the dedicated compute_virtual_signal function
+                    from ui.widgets.virtual_signal_computation import compute_virtual_signal
 
-            # Compute the virtual signal
-            self.log_message(f"Components-SignalOp: Computing virtual signal '{signal_name}' with expression: {expression}", self.DEBUG)
-            time_array, values = compute_virtual_signal(expression, alias_mapping, self.data_signals)
-            self.log_message(f"Components-SignalOp: Virtual signal calculation complete: {len(values)} points generated", self.DEBUG)
+                    # Compute the virtual signal for this bit
+                    self.log_message(
+                        f"Components-SignalOp: Computing bit signal '{bit_name}' with expression: {bit_expr}",
+                        self.DEBUG)
+                    time_array, values = compute_virtual_signal(bit_expr, bit_mapping, self.data_signals)
 
-            # Add the virtual signal to the data dictionary
-            self.data_signals[signal_name] = (time_array, values)
+                    # Add the bit signal to the data dictionary
+                    self.data_signals[bit_name] = (time_array, values)
 
-            # Create UI row for the new signal
-            row = self.build_signal_row(signal_name)
-            self.scroll_layout.addWidget(row)
+                    # Create UI row for this bit signal
+                    row = self.build_signal_row(bit_name)
+                    self.scroll_layout.addWidget(row)
 
-            # Auto-select the new signal
-            self.signal_widgets[signal_name]['checkbox'].setChecked(True)
+                    # Auto-select the new signal
+                    self.signal_widgets[bit_name]['checkbox'].setChecked(True)
 
-            QMessageBox.information(self, "Virtual Signal",
-                                    f"Virtual signal '{signal_name}' created successfully.")
-            self.log_message(f"Components-SignalOp: Virtual signal '{signal_name}' created successfully with expression: {expression}",
-                             self.INFO)
-        except Exception as e:
-            QMessageBox.critical(self, "Virtual Signal Error", str(e))
+                    self.log_message(f"Components-SignalOp: Bit signal '{bit_name}' created successfully", self.INFO)
+                except Exception as e:
+                    QMessageBox.critical(self, f"Virtual Signal Error - {bit_name}", str(e))
+
+            QMessageBox.information(self, "Virtual Signals Created",
+                                    f"Successfully created {len(result)} bit signals.")
+
+        # Handle regular expression mode (returns a single signal configuration)
+        elif isinstance(result, tuple):
+            signal_name, unit, expression, alias_mapping = result
+
+            try:
+                # Use the dedicated compute_virtual_signal function
+                from ui.widgets.virtual_signal_computation import compute_virtual_signal
+
+                # Compute the virtual signal
+                self.log_message(
+                    f"Components-SignalOp: Computing virtual signal '{signal_name}' with expression: {expression}",
+                    self.DEBUG)
+                time_array, values = compute_virtual_signal(expression, alias_mapping, self.data_signals)
+                self.log_message(
+                    f"Components-SignalOp: Virtual signal calculation complete: {len(values)} points generated",
+                    self.DEBUG)
+
+                # Add the virtual signal to the data dictionary
+                self.data_signals[signal_name] = (time_array, values)
+
+                # Create UI row for the new signal
+                row = self.build_signal_row(signal_name)
+                self.scroll_layout.addWidget(row)
+
+                # Auto-select the new signal
+                self.signal_widgets[signal_name]['checkbox'].setChecked(True)
+
+                QMessageBox.information(self, "Virtual Signal",
+                                        f"Virtual signal '{signal_name}' created successfully.")
+                self.log_message(
+                    f"Components-SignalOp: Virtual signal '{signal_name}' created successfully with expression: {expression}",
+                    self.INFO)
+            except Exception as e:
+                QMessageBox.critical(self, "Virtual Signal Error", str(e))
 
 
 def export_graph_simple(self):

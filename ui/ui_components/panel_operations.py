@@ -4,7 +4,7 @@ Control panel operational functions for the CSV Signal Viewer.
 import datetime
 import numpy as np
 
-from data.signal_utils import find_nearest_index
+from ui.widgets.signal_utils import find_nearest_index
 
 
 def toggle_complex_mode(self, state):
