@@ -1,8 +1,8 @@
 """
 Standard CSV parser implementation.
 
-This parser handles CSV files with Date and Time columns exactly like the original parser_old.py.
-It expects CSV files with semicolon or comma delimiters and Date/Time columns for timestamps.
+This parser handles CSV files with different delimiters (semicolon or comma)
+and supports Date/Time columns for timestamps.
 """
 
 import os
@@ -16,7 +16,7 @@ from utils.logger import Logger
 class StandardParser:
     """
     Parser for standard CSV files with Date and Time columns.
-    Replicates the exact behavior of parser_old.py for CSV format.
+    Replicates the exact behavior of parse_csv_file from parser.py.
     """
 
     def __init__(self):
@@ -32,19 +32,19 @@ class StandardParser:
         """
         return ['.csv', '.txt', '.dat']
 
-    def parse_file(self, file_path: str) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+    def parse_file(self, file_path: str) -> Tuple[Dict[str, Tuple[np.ndarray, np.ndarray]], Dict[str, Any]]:
         """
         Parse a standard CSV file with Date and Time columns.
 
-        This method replicates the exact behavior of parse_csv_file from parser_old.py.
+        This method replicates the exact behavior of parse_csv_file from parser.py.
 
         Args:
             file_path: Path to the file to parse
 
         Returns:
             Tuple containing:
-            - np.ndarray: Array of timestamps (float, seconds since epoch)
-            - Dict[str, np.ndarray]: Dictionary of signal name -> signal values
+            - Dictionary mapping signal names to tuples of (time_array, values_array)
+            - Dictionary of metadata about the file
 
         Raises:
             ValueError: If the file cannot be parsed
@@ -79,14 +79,6 @@ class StandardParser:
                     format='%Y-%m-%d %H:%M:%S.%f',
                     errors='coerce'
                 )
-                # TODO Make it more benevolent = different time formats
-                if df['Timestamp'].isna().sum() > 0:
-                    Logger.log_message_static("Parser-Standard: Error parsing timestamps, trying without milliseconds", Logger.DEBUG)
-                    df['Timestamp'] = pd.to_datetime(
-                        df['Date'] + ' ' + df['Time'].str.replace(',', '.', regex=False),
-                        format='%Y-%m-%d %H:%M:%S',
-                        errors='coerce'
-                    )
                 Logger.log_message_static("Parser-Standard: Successfully parsed timestamps", Logger.DEBUG)
             except Exception as e:
                 Logger.log_message_static(f"Parser-Standard: Error parsing timestamps: {str(e)}, trying flexible parsing", Logger.WARNING)
@@ -127,6 +119,7 @@ class StandardParser:
             # If column contains TRUE/FALSE values, treat as boolean
             if true_mask.any() or false_mask.any():
                 Logger.log_message_static(f"Parser-Standard: Detected boolean signal in column '{col}'", Logger.DEBUG)
+                # Force a refresh of the plot
                 signals[col] = values.to_numpy()  # Preserve TRUE/FALSE strings
             else:
                 # Try numeric conversion for non-boolean columns
@@ -147,5 +140,13 @@ class StandardParser:
             Logger.log_message_static("Parser-Standard: No signals could be parsed from the file", Logger.ERROR)
             raise ValueError("No signals could be parsed.")
 
+        # Convert format to match parser_master expectations
+        result_signals = {}
+        metadata = {"source_file": file_path, "parser": "StandardParser"}
+
+        for name, values in signals.items():
+            result_signals[name] = (timestamps, values)
+
         Logger.log_message_static(f"Parser-Standard: Successfully parsed {len(signals)} signals from CSV file", Logger.INFO)
-        return timestamps, signals
+        return result_signals, metadata
+

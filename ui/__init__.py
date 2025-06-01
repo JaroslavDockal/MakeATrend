@@ -1,7 +1,7 @@
 """
-UI package for CSV Signal Viewer.
+UI package for MakeATrend application.
 
-This package provides the graphical user interface components for the CSV Signal Viewer
+This package provides the graphical user interface components for the MakeATrend
 application, including the main viewer window and all supporting UI elements.
 """
 
@@ -12,8 +12,12 @@ from .viewer import SignalViewer
 from .ui_components.control_panel import setup_control_panel
 from .ui_components.plot_area import setup_plot_area, setup_axes
 
+# Import widgets for direct access
+from .widgets.virtual_signal_dialog import VirtualSignalDialog
+from .widgets.virtual_signal_computation import compute_virtual_signal
+
 # Version information
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 
 def get_main_viewer():
@@ -25,20 +29,3 @@ def get_main_viewer():
     """
     return SignalViewer.instance
 
-
-# Define what's available when using "from ui import *"
-__all__ = [
-    # Main class
-    'SignalViewer',
-
-    # Convenience functions
-    'get_main_viewer',
-
-    # Setup functions that might be needed externally
-    'setup_control_panel',
-    'setup_plot_area',
-    'setup_axes',
-
-    # Version info
-    '__version__'
-]

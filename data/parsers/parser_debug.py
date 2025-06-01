@@ -1,7 +1,7 @@
 """
 Debug/Recorder parser implementation.
 
-This parser handles the Drive Debug recorder format exactly like the original parser_old.py.
+This parser handles the Drive Debug recorder format exactly like the original parser.py.
 It processes files with "RECORDER VALUES" or "TREND VALUES" headers and proprietary format.
 """
 
@@ -17,7 +17,7 @@ from utils.logger import Logger
 class DebugParser:
     """
     Parser for Drive Debug recorder format files.
-    Replicates the exact behavior of parse_recorder_format from parser_old.py.
+    Replicates the exact behavior of parse_recorder_format from parser.py.
     """
 
     def __init__(self):
@@ -55,19 +55,19 @@ class DebugParser:
             except:
                 return False
 
-    def parse_file(self, file_path: str) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+    def parse_file(self, file_path: str) -> Tuple[Dict[str, Tuple[np.ndarray, np.ndarray]], Dict[str, Any]]:
         """
         Parse a Drive Debug recorder format file.
 
-        This method replicates the exact behavior of parse_recorder_format from parser_old.py.
+        This method replicates the exact behavior of parse_recorder_format from parser.py.
 
         Args:
             file_path: Path to the file to parse
 
         Returns:
             Tuple containing:
-            - np.ndarray: Array of timestamps (float, seconds since UNIX epoch)
-            - Dict[str, np.ndarray]: Dictionary of signal name -> signal values as float32 arrays
+            - Dictionary mapping signal names to tuples of (time_array, values_array)
+            - Dictionary of metadata about the file
 
         Raises:
             ValueError: If the file cannot be parsed as recorder format
@@ -158,16 +158,25 @@ class DebugParser:
 
         Logger.log_message_static("Parser-Debug: Calculating timestamps", Logger.DEBUG)
         timestamps = [(start_dt - timedelta(seconds=row[0] * interval_sec)).timestamp() for row in data_lines]
+        timestamps_np = np.array(timestamps, dtype=np.float64)
 
-        signals = {}
+        raw_signals = {}
         Logger.log_message_static("Parser-Debug: Extracting signal values", Logger.DEBUG)
         for i in range(len(data_lines[0]) - 1):
             name = item_map.get(i + 1, f"Signal {i + 1}")
-            signals[name] = [row[i + 1] for row in data_lines]
+            raw_signals[name] = [row[i + 1] for row in data_lines]
 
-        for name in signals:
-            signals[name] = np.array(signals[name], dtype=np.float32)
-            Logger.log_message_static(f"Parser-Debug: Created signal '{name}' with {len(signals[name])} points", Logger.DEBUG)
+        for name in raw_signals:
+            raw_signals[name] = np.array(raw_signals[name], dtype=np.float32)
+            Logger.log_message_static(f"Parser-Debug: Created signal '{name}' with {len(raw_signals[name])} points", Logger.DEBUG)
 
-        Logger.log_message_static(f"Parser-Debug: Successfully parsed {len(signals)} signals from Drive Debug file", Logger.INFO)
-        return np.array(timestamps, dtype=np.float64), signals
+        # Convert format to match parser_master expectations
+        result_signals = {}
+        metadata = {"source_file": file_path, "parser": "DebugParser", "interval": interval_sec, "start_time": start_time_str}
+
+        for name, values in raw_signals.items():
+            result_signals[name] = (timestamps_np, values)
+
+        Logger.log_message_static(f"Parser-Debug: Successfully parsed {len(result_signals)} signals from Drive Debug file", Logger.INFO)
+        return result_signals, metadata
+

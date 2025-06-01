@@ -12,7 +12,6 @@ from datetime import datetime
 
 try:
     from nptdms import TdmsFile
-
     NPTDMS_AVAILABLE = True
 except ImportError:
     NPTDMS_AVAILABLE = False
@@ -40,7 +39,7 @@ class TDMSParser:
         """
         return ['.tdms']
 
-    def parse_file(self, file_path: str) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+    def parse_file(self, file_path: str) -> Tuple[Dict[str, Tuple[np.ndarray, np.ndarray]], Dict[str, Any]]:
         """
         Parse a TDMS file and extract timestamps and signals.
 
@@ -49,8 +48,8 @@ class TDMSParser:
 
         Returns:
             Tuple containing:
-            - np.ndarray: Array of timestamps (float, seconds since epoch)
-            - Dict[str, np.ndarray]: Dictionary of signal name -> signal values
+            - Dictionary mapping signal names to tuples of (time_array, values_array)
+            - Dictionary of metadata about the file
 
         Raises:
             ValueError: If the file cannot be parsed
@@ -97,7 +96,7 @@ class TDMSParser:
                                                   Logger.WARNING)
                         continue
 
-                    # Handle timestamps
+                    # Handle timestamps - extract from first channel that has timing info
                     if timestamps is None:
                         timestamps = self._extract_timestamps(channel)
                         if timestamps is not None:
@@ -130,9 +129,16 @@ class TDMSParser:
         # Ensure all signals have the same length as timestamps
         timestamps, signals = self._align_data_lengths(timestamps, signals)
 
+        # Convert to master parser format: Dict[str, Tuple[np.ndarray, np.ndarray]]
+        result_signals = {}
+        metadata = {"source_file": file_path, "parser": "TDMSParser"}
+
+        for name, values in signals.items():
+            result_signals[name] = (timestamps, values)
+
         Logger.log_message_static(f"Parser-TDMS: Successfully parsed {len(signals)} signals from TDMS file",
                                   Logger.INFO)
-        return timestamps, signals
+        return result_signals, metadata
 
     def _extract_timestamps(self, channel) -> np.ndarray:
         """
@@ -145,15 +151,18 @@ class TDMSParser:
             np.ndarray: Array of timestamps in seconds since epoch, or None if not found
         """
         try:
-            # Check if channel has time information
+            # Method 1: Check if channel has time information via time_track
             if hasattr(channel, 'time_track') and channel.time_track() is not None:
                 time_data = channel.time_track()
                 # Convert datetime objects to timestamps
-                if len(time_data) > 0 and hasattr(time_data[0], 'timestamp'):
-                    timestamps = np.array([t.timestamp() for t in time_data])
-                    return timestamps
+                if len(time_data) > 0:
+                    if hasattr(time_data[0], 'timestamp'):
+                        timestamps = np.array([t.timestamp() for t in time_data])
+                        return timestamps
+                    elif isinstance(time_data[0], (int, float)):
+                        return np.array(time_data, dtype=float)
 
-            # Check channel properties for timing information
+            # Method 2: Check channel properties for timing information
             properties = channel.properties
             if 'wf_start_time' in properties and 'wf_increment' in properties:
                 start_time = properties['wf_start_time']
@@ -166,10 +175,28 @@ class TDMSParser:
                 elif isinstance(start_time, (int, float)):
                     start_timestamp = start_time
                 else:
+                    Logger.log_message_static(f"Parser-TDMS: Unsupported start_time type: {type(start_time)}", Logger.WARNING)
                     return None
 
                 # Generate timestamps
                 timestamps = start_timestamp + np.arange(data_length) * increment
+                return timestamps
+
+            # Method 3: Check for other common time properties
+            time_properties = ['wf_start_offset', 'NI_ArrayColumn_X_Start', 'NI_ArrayColumn_X_Increment']
+            start_offset = None
+            increment = None
+
+            for prop in time_properties:
+                if prop in properties:
+                    if 'start' in prop.lower() or 'offset' in prop.lower():
+                        start_offset = properties[prop]
+                    elif 'increment' in prop.lower():
+                        increment = properties[prop]
+
+            if start_offset is not None and increment is not None:
+                data_length = len(channel[:])
+                timestamps = start_offset + np.arange(data_length) * increment
                 return timestamps
 
             return None
@@ -190,6 +217,15 @@ class TDMSParser:
             np.ndarray: Processed signal data, or None if processing fails
         """
         try:
+            # Handle None or empty data
+            if data is None or len(data) == 0:
+                Logger.log_message_static(f"Parser-TDMS: Channel '{channel_name}' is empty", Logger.WARNING)
+                return None
+
+            # Convert to numpy array if not already
+            if not isinstance(data, np.ndarray):
+                data = np.array(data)
+
             # Handle different data types
             if data.dtype == bool:
                 # Convert boolean to string format like StandardParser
@@ -200,29 +236,53 @@ class TDMSParser:
             elif np.issubdtype(data.dtype, np.number):
                 # Numeric data - convert to float32 like StandardParser
                 Logger.log_message_static(f"Parser-TDMS: Converting channel '{channel_name}' to numeric", Logger.DEBUG)
-                return data.astype(np.float32)
+                # Handle potential NaN or infinite values
+                cleaned_data = np.where(np.isfinite(data), data, 0)
+                return cleaned_data.astype(np.float32)
 
             elif data.dtype.kind in ['U', 'S', 'O']:  # String data
                 # Try to detect if strings represent boolean values
                 str_data = data.astype(str)
                 upper_data = np.char.upper(str_data)
 
-                if np.any(np.isin(upper_data, ['TRUE', 'FALSE'])):
+                # Check if this looks like boolean data
+                unique_vals = np.unique(upper_data)
+                bool_vals = set(['TRUE', 'FALSE', '1', '0', 'YES', 'NO', 'ON', 'OFF'])
+                if len(unique_vals) <= 2 and any(val in bool_vals for val in unique_vals):
                     Logger.log_message_static(f"Parser-TDMS: Detected boolean strings in channel '{channel_name}'",
                                               Logger.DEBUG)
-                    return upper_data
+                    # Normalize to TRUE/FALSE
+                    result = np.where(np.isin(upper_data, ['TRUE', '1', 'YES', 'ON']), 'TRUE', 'FALSE')
+                    return result
 
                 # Try numeric conversion
                 try:
-                    # Replace common decimal separators
-                    cleaned_data = np.char.replace(str_data, ',', '.')
-                    numeric_data = cleaned_data.astype(float)
+                    # Replace common decimal separators and clean whitespace
+                    cleaned_data = np.char.strip(str_data)
+                    cleaned_data = np.char.replace(cleaned_data, ',', '.')
+
+                    # Try to convert to numeric
+                    numeric_data = pd.to_numeric(cleaned_data, errors='coerce')
+
+                    # Check if conversion was successful for most values
+                    valid_ratio = (~numeric_data.isnull()).sum() / len(numeric_data)
+                    if valid_ratio > 0.8:  # At least 80% of values converted successfully
+                        Logger.log_message_static(
+                            f"Parser-TDMS: Successfully converted string channel '{channel_name}' to numeric ({valid_ratio:.1%} success rate)",
+                            Logger.DEBUG)
+                        # Fill NaN with 0
+                        numeric_data = numeric_data.fillna(0)
+                        return numeric_data.astype(np.float32)
+                    else:
+                        Logger.log_message_static(
+                            f"Parser-TDMS: Channel '{channel_name}' has too many non-numeric strings ({valid_ratio:.1%} success rate), skipping",
+                            Logger.WARNING)
+                        return None
+
+                except Exception as conv_e:
                     Logger.log_message_static(
-                        f"Parser-TDMS: Successfully converted string channel '{channel_name}' to numeric", Logger.DEBUG)
-                    return numeric_data.astype(np.float32)
-                except (ValueError, TypeError):
-                    Logger.log_message_static(
-                        f"Parser-TDMS: Channel '{channel_name}' contains non-numeric strings, skipping", Logger.WARNING)
+                        f"Parser-TDMS: Failed to convert string channel '{channel_name}' to numeric: {str(conv_e)}",
+                        Logger.WARNING)
                     return None
 
             else:
@@ -232,7 +292,7 @@ class TDMSParser:
 
         except Exception as e:
             Logger.log_message_static(f"Parser-TDMS: Error processing signal data for '{channel_name}': {str(e)}",
-                                      Logger.WARNING)
+                                      Logger.ERROR)
             return None
 
     def _generate_synthetic_timestamps(self, signals: Dict[str, np.ndarray]) -> np.ndarray:

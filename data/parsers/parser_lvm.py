@@ -34,7 +34,7 @@ class LVMParser:
         """
         return ['.lvm']
 
-    def parse_file(self, file_path: str) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+    def parse_file(self, file_path: str) -> Tuple[Dict[str, Tuple[np.ndarray, np.ndarray]], Dict[str, Any]]:
         """
         Parse a LVM file and extract timestamps and signals.
 
@@ -43,8 +43,8 @@ class LVMParser:
 
         Returns:
             Tuple containing:
-            - np.ndarray: Array of timestamps (float, seconds since epoch)
-            - Dict[str, np.ndarray]: Dictionary of signal name -> signal values
+            - Dictionary mapping signal names to tuples of (time_array, values_array)
+            - Dictionary of metadata about the file
 
         Raises:
             ValueError: If the file cannot be parsed
@@ -81,8 +81,15 @@ class LVMParser:
             Logger.log_message_static("Parser-LVM: No signals could be parsed from the file", Logger.ERROR)
             raise ValueError("No signals could be parsed from the file")
 
+        # Convert to StandardParser format: Dict[str, Tuple[np.ndarray, np.ndarray]]
+        result_signals = {}
+        metadata = {"source_file": file_path, "parser": "LVMParser"}
+
+        for name, values in signals.items():
+            result_signals[name] = (timestamps, values)
+
         Logger.log_message_static(f"Parser-LVM: Successfully parsed {len(signals)} signals from LVM file", Logger.INFO)
-        return timestamps, signals
+        return result_signals, metadata
 
     def _parse_lvm_content(self, content: str) -> Tuple[Dict[str, Any], List[str]]:
         """
@@ -137,8 +144,7 @@ class LVMParser:
         Logger.log_message_static(f"Parser-LVM: Found {len(data_lines)} data lines", Logger.DEBUG)
         return header_info, data_lines
 
-    def _parse_data_section(self, data_lines: List[str], header_info: Dict[str, Any]) -> Tuple[
-        np.ndarray, Dict[str, np.ndarray]]:
+    def _parse_data_section(self, data_lines: List[str], header_info: Dict[str, Any]) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         """
         Parse the data section of LVM file.
 
@@ -241,17 +247,14 @@ class LVMParser:
                 # Check if conversion was successful for most values
                 valid_ratio = (~numeric_data.isna()).sum() / len(numeric_data)
                 if valid_ratio > 0.5:  # At least 50% valid numeric values
-                    Logger.log_message_static(f"Parser-LVM: Successfully converted column '{col_name}' to numeric",
-                                              Logger.DEBUG)
+                    Logger.log_message_static(f"Parser-LVM: Successfully converted column '{col_name}' to numeric", Logger.DEBUG)
                     return numeric_data.to_numpy(dtype=np.float32)
                 else:
-                    Logger.log_message_static(f"Parser-LVM: Column '{col_name}' contains mostly non-numeric values",
-                                              Logger.WARNING)
+                    Logger.log_message_static(f"Parser-LVM: Column '{col_name}' contains mostly non-numeric values", Logger.WARNING)
                     return None
 
             except Exception as e:
-                Logger.log_message_static(f"Parser-LVM: Failed to convert column '{col_name}' to numeric: {str(e)}",
-                                          Logger.WARNING)
+                Logger.log_message_static(f"Parser-LVM: Failed to convert column '{col_name}' to numeric: {str(e)}", Logger.WARNING)
                 return None
 
         except Exception as e:
@@ -284,8 +287,7 @@ class LVMParser:
                         try:
                             dt = datetime.strptime(datetime_str, fmt)
                             base_time = dt.timestamp()
-                            Logger.log_message_static(f"Parser-LVM: Using header timestamp: {datetime_str}",
-                                                      Logger.DEBUG)
+                            Logger.log_message_static(f"Parser-LVM: Using header timestamp: {datetime_str}", Logger.DEBUG)
                             break
                         except ValueError:
                             continue

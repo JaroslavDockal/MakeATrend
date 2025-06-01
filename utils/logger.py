@@ -1,5 +1,7 @@
 import os
 import datetime
+import threading
+
 
 class Logger:
     # Log levels
@@ -9,7 +11,9 @@ class Logger:
     ERROR = 3
 
     # Filter for log detail level (0-5, higher = more detail)
-    debug_filter = 5
+    debug_filter = 0
+    # Whether to display thread name in log messages
+    display_thread_name = True
 
     _instance = None
 
@@ -36,6 +40,7 @@ class Logger:
             return
 
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        thread_name = threading.current_thread().name
 
         # Get level name for the message
         level_names = {
@@ -46,7 +51,11 @@ class Logger:
         }
         level_name = level_names.get(level, "INFO")
 
-        formatted_message = f"[{timestamp}] {level_name}: {message}"
+        # Format the message with timestamp, level, and thread name if enabled
+        if self.display_thread_name:
+            formatted_message = f"[{timestamp}] {level_name}: {message}; Thread: {thread_name}"
+        else:
+            formatted_message = f"[{timestamp}] {level_name}: {message}"
 
         # Log to console
         print(formatted_message)
