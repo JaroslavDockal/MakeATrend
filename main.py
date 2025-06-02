@@ -1,17 +1,19 @@
 """
 Entry point for the CSV Signal Viewer application.
 """
-import sys
 import os
-from PySide6.QtWidgets import QApplication
+import sys
+
 from PySide6.QtGui import QIcon
-from viewer import SignalViewer
+from PySide6.QtWidgets import QApplication
+
+from ui.viewer import SignalViewer
 
 
 def main():
     app = QApplication(sys.argv)
 
-    icon_path = os.path.join(os.path.dirname(__file__), "assets", "line-graph.ico")
+    icon_path = os.path.join(os.path.dirname(__file__), "_assets", "line-graph.ico")
     app.setWindowIcon(QIcon(icon_path))
 
     viewer = SignalViewer()
@@ -22,7 +24,6 @@ def main():
     except KeyboardInterrupt:
         print("Application interrupted by user, exiting...")
         sys.exit(0)
-
 
 if __name__ == "__main__":
     main()
