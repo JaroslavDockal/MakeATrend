@@ -20,6 +20,7 @@ in rotating machinery.
 import numpy as np
 from scipy import stats
 from analysis.calculations.common import safe_prepare_signal, safe_sample_rate
+from analysis.vibration.unit_conversion import convert_vibration_units
 from utils.logger import Logger
 
 

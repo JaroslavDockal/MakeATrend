@@ -62,12 +62,6 @@ from analysis.calculations.common import (
     validate_analysis_inputs,
     format_array_for_display,
     calculate_bandwidth
-),
-    safe_sample_rate,
-    extended_prepare_signal,
-    validate_analysis_inputs,
-    format_array_for_display,
-    calculate_bandwidth
 )
 
 # Version information
