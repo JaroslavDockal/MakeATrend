@@ -9,6 +9,7 @@ This package provides comprehensive signal analysis functions organized by domai
 - filters: IIR and FIR filtering
 - wavelet: Continuous and discrete wavelet transforms
 - cepstrum: Cepstral analysis for periodicity detection
+- vibration: Specialized vibration analysis functions
 - common: Shared utilities and validation functions
 
 All functions follow consistent interfaces and error handling patterns.
@@ -64,11 +65,53 @@ from analysis.calculations.common import (
     calculate_bandwidth
 )
 
+# Import vibration-specific functions
+try:
+    from analysis.vibration.metrics import (
+        calculate_vibration_metrics,
+        calculate_vibration_severity,
+        assess_machine_condition
+    )
+
+    from analysis.vibration.fft import (
+        calculate_vibration_fft
+    )
+
+    from analysis.vibration.envelope import (
+        calculate_envelope_analysis
+    )
+
+    from analysis.vibration.detection import (
+        detect_vibration_signals,
+        detect_rpm_signals,
+        classify_signal_type,
+        get_signal_recommendations
+    )
+
+    from analysis.vibration.bearing import (
+        calculate_bearing_fault_frequencies,
+        calculate_gear_mesh_frequencies,
+        get_typical_bearing_parameters
+    )
+
+    from analysis.vibration.severity import (
+        assess_vibration_severity_iso10816,
+        assess_vibration_severity_iso2372,
+        get_severity_recommendations
+    )
+
+    VIBRATION_AVAILABLE = True
+
+except ImportError as e:
+    import warnings
+    warnings.warn(f"Vibration analysis not available: {e}")
+    VIBRATION_AVAILABLE = False
+
 # Version information
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 __author__ = "MakeATrend Analysis Team"
 
-# Define what gets exported when using "from analysis.calculations import *"
+# Define what gets exported when using "from analysis import *"
 __all__ = [
     # Basic analysis
     'calculate_basic_statistics',
@@ -112,6 +155,37 @@ __all__ = [
     'calculate_bandwidth'
 ]
 
+# Add vibration functions if available
+if VIBRATION_AVAILABLE:
+    __all__.extend([
+        # Vibration metrics
+        'calculate_vibration_metrics',
+        'calculate_vibration_severity',
+        'assess_machine_condition',
+
+        # Vibration FFT
+        'calculate_vibration_fft',
+
+        # Envelope analysis
+        'calculate_envelope_analysis',
+
+        # Signal detection
+        'detect_vibration_signals',
+        'detect_rpm_signals',
+        'classify_signal_type',
+        'get_signal_recommendations',
+
+        # Bearing analysis
+        'calculate_bearing_fault_frequencies',
+        'calculate_gear_mesh_frequencies',
+        'get_typical_bearing_parameters',
+
+        # Severity assessment
+        'assess_vibration_severity_iso10816',
+        'assess_vibration_severity_iso2372',
+        'get_severity_recommendations'
+    ])
+
 # Optional: Create convenience function groups
 BASIC_FUNCTIONS = [
     'calculate_basic_statistics',
@@ -121,7 +195,8 @@ BASIC_FUNCTIONS = [
 
 FREQUENCY_FUNCTIONS = [
     'calculate_fft_analysis',
-    'calculate_psd_analysis'
+    'calculate_psd_analysis',
+    'calculate_spectral_features'
 ]
 
 ADVANCED_FUNCTIONS = [
@@ -141,8 +216,23 @@ CORRELATION_FUNCTIONS = [
 
 FILTER_FUNCTIONS = [
     'calculate_iir_filter',
-    'calculate_fir_filter'
+    'calculate_fir_filter',
+    'design_filter_parameters'
 ]
+
+VIBRATION_FUNCTIONS = []
+if VIBRATION_AVAILABLE:
+    VIBRATION_FUNCTIONS = [
+        'calculate_vibration_metrics',
+        'calculate_vibration_severity',
+        'assess_machine_condition',
+        'calculate_vibration_fft',
+        'calculate_envelope_analysis',
+        'detect_vibration_signals',
+        'calculate_bearing_fault_frequencies',
+        'assess_vibration_severity_iso10816'
+    ]
+
 
 def get_function_info():
     """
@@ -151,7 +241,7 @@ def get_function_info():
     Returns:
         dict: Dictionary with function categories and descriptions
     """
-    return {
+    info = {
         'basic': {
             'functions': BASIC_FUNCTIONS,
             'description': 'Basic statistical and time-domain analysis'
@@ -173,6 +263,14 @@ def get_function_info():
             'description': 'Signal filtering (IIR, FIR)'
         }
     }
+
+    if VIBRATION_AVAILABLE:
+        info['vibration'] = {
+            'functions': VIBRATION_FUNCTIONS,
+            'description': 'Vibration analysis and machinery diagnostics'
+        }
+
+    return info
 
 
 def list_available_functions():
@@ -197,6 +295,23 @@ def list_available_functions():
                 print(f"  {func_name:35} - {first_line}")
             else:
                 print(f"  {func_name:35} - No description available")
+
+
+def get_module_status():
+    """
+    Get status information about the analysis module.
+
+    Returns:
+        dict: Status information
+    """
+    return {
+        'version': __version__,
+        'vibration_available': VIBRATION_AVAILABLE,
+        'total_functions': len(__all__),
+        'function_categories': len(get_function_info()),
+        'backward_compatibility': True,
+        'import_status': 'Success'
+    }
 
 
 # Optional: Validation functions for development/testing
@@ -227,14 +342,71 @@ def validate_all_imports():
     return results
 
 
+def check_dependencies():
+    """
+    Check if all required dependencies are available.
+
+    Returns:
+        dict: Dependency status
+    """
+    dependencies = {
+        'numpy': False,
+        'scipy': False,
+        'pywt': False,
+        'PySide6': False
+    }
+
+    try:
+        import numpy
+        dependencies['numpy'] = True
+    except ImportError:
+        pass
+
+    try:
+        import scipy
+        dependencies['scipy'] = True
+    except ImportError:
+        pass
+
+    try:
+        import pywt
+        dependencies['pywt'] = True
+    except ImportError:
+        pass
+
+    try:
+        import PySide6
+        dependencies['PySide6'] = True
+    except ImportError:
+        pass
+
+    return dependencies
+
+
 # Development helper
 if __name__ == "__main__":
     # When run as script, show available functions
+    print("MakeATrend Analysis Module")
+    print("=" * 30)
+
+    status = get_module_status()
+    print(f"Version: {status['version']}")
+    print(f"Vibration functions: {'✓' if status['vibration_available'] else '✗'}")
+    print(f"Total functions: {status['total_functions']}")
+    print(f"Categories: {status['function_categories']}")
+
+    print("\nDependency check:")
+    deps = check_dependencies()
+    for dep, available in deps.items():
+        print(f"  {dep}: {'✓' if available else '✗'}")
+
+    print("\n" + "="*50)
     list_available_functions()
 
     # Validate imports
+    print("\n" + "="*50)
     validation = validate_all_imports()
-    print(f"\n\nValidation Results:")
+    print(f"Import Validation Results:")
     print(f"Successfully imported: {len(validation['success'])}/{validation['total']}")
 
     if validation['failed']:

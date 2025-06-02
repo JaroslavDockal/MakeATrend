@@ -14,7 +14,12 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from utils.logger import Logger
-from utils.expression_validator import validate_expression, validate_signal_name
+from ui.widgets.virtual_signal_computation import (
+    validate_expression, validate_signal_name,
+    compute_virtual_signal, compute_bit_decomposition,
+    compute_single_bit_extraction
+)
+
 
 class VirtualSignalDialog(QDialog):
     """
@@ -363,7 +368,7 @@ class VirtualSignalDialog(QDialog):
                 if not is_valid_expr:
                     Logger.log_message_static(f"Widget-VirtualSignal: Expression validation failed: {expr_error}",
                                               Logger.WARNING)
-                    QMessageBox.warning(self, "Validation Error", f"Invalid expression: {expr_errorerror}")
+                    QMessageBox.warning(self, "Validation Error", f"Invalid expression: {expr_error}")
                     return
 
                 # Check if each alias has an assigned signal

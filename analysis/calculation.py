@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Backward compatibility layer for the refactored analysis calculations.
 

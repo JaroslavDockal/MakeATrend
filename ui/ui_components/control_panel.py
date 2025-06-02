@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QWidget, QSpinBox, QLineEdit
 )
 
-from analysis.analysis_dialog import show_analysis_dialog
+from analysis.components.dialog import show_analysis_dialog
 
 
 def setup_control_panel(viewer):
