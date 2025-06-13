@@ -12,7 +12,6 @@ from datetime import datetime
 
 try:
     from scipy.io import loadmat
-
     SCIPY_AVAILABLE = True
 except ImportError:
     SCIPY_AVAILABLE = False
@@ -40,7 +39,7 @@ class MATParser:
         """
         return ['.mat']
 
-    def parse_file(self, file_path: str) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+    def parse_file(self, file_path: str) -> Tuple[Dict[str, Tuple[np.ndarray, np.ndarray]], Dict[str, Any]]:
         """
         Parse a MAT file and extract timestamps and signals.
 
@@ -49,8 +48,8 @@ class MATParser:
 
         Returns:
             Tuple containing:
-            - np.ndarray: Array of timestamps (float, seconds since epoch)
-            - Dict[str, np.ndarray]: Dictionary of signal name -> signal values
+            - Dictionary mapping signal names to tuples of (time_array, values_array)
+            - Dictionary of metadata about the file
 
         Raises:
             ValueError: If the file cannot be parsed
@@ -82,8 +81,15 @@ class MATParser:
         # Ensure all signals have the same length as timestamps
         timestamps, signals = self._align_data_lengths(timestamps, signals)
 
+        # Convert to master parser format: Dict[str, Tuple[np.ndarray, np.ndarray]]
+        result_signals = {}
+        metadata = {"source_file": file_path, "parser": "MATParser"}
+
+        for name, values in signals.items():
+            result_signals[name] = (timestamps, values)
+
         Logger.log_message_static(f"Parser-MAT: Successfully parsed {len(signals)} signals from MAT file", Logger.INFO)
-        return timestamps, signals
+        return result_signals, metadata
 
     def _extract_data_from_mat(self, mat_data: Dict[str, Any]) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         """
@@ -121,7 +127,7 @@ class MATParser:
                     Logger.log_message_static(f"Parser-MAT: Variable '{var_name}' is empty, skipping", Logger.WARNING)
                     continue
 
-                # Check if this could be timestamp data
+                # Check if this could be timestamp data (only if we don't have timestamps yet)
                 if timestamps is None and self._could_be_timestamps(var_data, var_name):
                     timestamps = self._process_timestamp_data(var_data, var_name)
                     if timestamps is not None:
@@ -161,7 +167,7 @@ class MATParser:
         """
         # Check name hints
         name_lower = name.lower()
-        time_keywords = ['time', 'timestamp', 'datetime', 'date', 't', 'zeit']
+        time_keywords = ['time', 'timestamp', 'datetime', 'date', 't', 'zeit', 'cas', 'doba']
         if any(keyword in name_lower for keyword in time_keywords):
             return True
 
@@ -170,21 +176,35 @@ class MATParser:
             # Flatten if multidimensional
             flat_data = data.flatten()
 
-            # Check if values are in reasonable timestamp range
-            if len(flat_data) > 1:  # Need at least 2 points for timestamps
-                min_val, max_val = np.min(flat_data), np.max(flat_data)
+            # Need at least 2 points for timestamps and reasonable length
+            if 2 <= len(flat_data) <= 1000000:
+                try:
+                    min_val, max_val = np.min(flat_data), np.max(flat_data)
 
-                # Unix timestamp range (1970-2100)
-                if 0 < min_val < 4102444800 and max_val > min_val:
-                    return True
+                    # Skip arrays with all same values
+                    if min_val == max_val:
+                        return False
 
-                # Relative time (starting from 0, reasonable increments)
-                if min_val >= 0 and max_val - min_val > 0:
-                    # Check if it looks like a time series (monotonic increase)
-                    if len(flat_data) > 2:
-                        diffs = np.diff(flat_data)
-                        if np.all(diffs >= 0):  # Monotonic increase
-                            return True
+                    # Unix timestamp range (1970-2100)
+                    if 0 < min_val < 4102444800 and max_val > min_val:
+                        return True
+
+                    # MATLAB datenum range (days since year 0)
+                    if 719529 < min_val < 767011 and max_val > min_val:  # Roughly 1970-2100 in datenum
+                        return True
+
+                    # Relative time (starting from 0 or small value, reasonable increments)
+                    if 0 <= min_val < 1000 and max_val - min_val > 0:
+                        # Check if it looks like a time series (monotonic increase)
+                        if len(flat_data) > 2:
+                            diffs = np.diff(flat_data)
+                            # At least 80% of differences should be positive (mostly increasing)
+                            positive_ratio = np.sum(diffs > 0) / len(diffs)
+                            if positive_ratio > 0.8:
+                                return True
+
+                except Exception:
+                    pass
 
         return False
 
@@ -216,18 +236,35 @@ class MATParser:
                 # Convert to float64 for timestamps
                 timestamps = data.astype(np.float64)
 
-                # Check if timestamps look like Unix timestamps
+                # Remove any NaN or infinite values
+                if np.any(~np.isfinite(timestamps)):
+                    Logger.log_message_static(f"Parser-MAT: Removing {np.sum(~np.isfinite(timestamps))} invalid timestamp values", Logger.WARNING)
+                    valid_mask = np.isfinite(timestamps)
+                    timestamps = timestamps[valid_mask]
+
+                if len(timestamps) < 2:
+                    Logger.log_message_static(f"Parser-MAT: Not enough valid timestamps in '{name}'", Logger.WARNING)
+                    return None
+
+                # Check timestamp format and convert if needed
                 min_val = np.min(timestamps)
-                if min_val > 1e9:  # Looks like Unix timestamp
+                max_val = np.max(timestamps)
+
+                if min_val > 1e9:  # Looks like Unix timestamp (after ~1973)
                     return timestamps
                 elif min_val > 719529:  # MATLAB datenum (days since year 0)
                     # Convert MATLAB datenum to Unix timestamp
+                    Logger.log_message_static(f"Parser-MAT: Converting MATLAB datenum to Unix timestamps", Logger.DEBUG)
                     unix_timestamps = (timestamps - 719529) * 86400
                     return unix_timestamps
-                else:
+                elif 0 <= min_val < 1000 and max_val > min_val:
                     # Relative timestamps - convert to absolute
+                    Logger.log_message_static(f"Parser-MAT: Converting relative timestamps to absolute", Logger.DEBUG)
                     current_time = datetime.now().timestamp()
                     return current_time + timestamps
+                else:
+                    Logger.log_message_static(f"Parser-MAT: Timestamp range ({min_val:.2f} to {max_val:.2f}) not recognized", Logger.WARNING)
+                    return None
 
             return None
 
@@ -260,12 +297,22 @@ class MATParser:
                     data = data.flatten()
                 elif data.shape[0] == 1:
                     data = data.flatten()
+                elif min(data.shape) <= 3:
+                    # Small matrix - take the largest dimension as the signal
+                    if data.shape[0] > data.shape[1]:
+                        Logger.log_message_static(f"Parser-MAT: Variable '{name}' is a matrix, taking first column", Logger.WARNING)
+                        data = data[:, 0]
+                    else:
+                        Logger.log_message_static(f"Parser-MAT: Variable '{name}' is a matrix, taking first row", Logger.WARNING)
+                        data = data[0, :]
                 else:
-                    # Matrix data - take first column or create multiple signals would be better
-                    # but for simplicity, we'll take the first column
-                    Logger.log_message_static(f"Parser-MAT: Variable '{name}' is a matrix, taking first column",
-                                              Logger.WARNING)
-                    data = data[:, 0]
+                    Logger.log_message_static(f"Parser-MAT: Variable '{name}' is a large matrix ({data.shape}), skipping", Logger.WARNING)
+                    return None
+
+            # Skip if too few data points
+            if len(data) < 2:
+                Logger.log_message_static(f"Parser-MAT: Variable '{name}' has too few data points", Logger.WARNING)
+                return None
 
             if data.dtype == bool:
                 # Convert boolean to string format like StandardParser
@@ -273,16 +320,43 @@ class MATParser:
                 return np.array(['TRUE' if x else 'FALSE' for x in data])
 
             elif np.issubdtype(data.dtype, np.number):
-                # Numeric data - convert to float32 like StandardParser
+                # Numeric data - handle NaN and infinite values
                 Logger.log_message_static(f"Parser-MAT: Converting variable '{name}' to numeric", Logger.DEBUG)
-                return data.astype(np.float32)
+
+                # Replace inf with NaN, then handle NaN
+                data_clean = np.where(np.isfinite(data), data, np.nan)
+
+                # If too many NaN values, skip
+                nan_ratio = np.sum(np.isnan(data_clean)) / len(data_clean)
+                if nan_ratio > 0.5:
+                    Logger.log_message_static(f"Parser-MAT: Variable '{name}' has too many NaN values ({nan_ratio:.1%}), skipping", Logger.WARNING)
+                    return None
+
+                # Fill remaining NaN with interpolation or zero
+                if nan_ratio > 0:
+                    Logger.log_message_static(f"Parser-MAT: Filling {nan_ratio:.1%} NaN values in '{name}'", Logger.DEBUG)
+                    # Simple forward fill, then backward fill, then zero fill
+                    mask = ~np.isnan(data_clean)
+                    if np.any(mask):
+                        # Forward fill
+                        for i in range(1, len(data_clean)):
+                            if np.isnan(data_clean[i]) and not np.isnan(data_clean[i-1]):
+                                data_clean[i] = data_clean[i-1]
+                        # Backward fill
+                        for i in range(len(data_clean)-2, -1, -1):
+                            if np.isnan(data_clean[i]) and not np.isnan(data_clean[i+1]):
+                                data_clean[i] = data_clean[i+1]
+                        # Zero fill any remaining
+                        data_clean = np.where(np.isnan(data_clean), 0, data_clean)
+
+                return data_clean.astype(np.float32)
 
             elif data.dtype.kind in ['U', 'S', 'O']:  # String data
                 # Handle MATLAB cell arrays and string arrays
                 if data.dtype == object:
                     # Try to extract strings from cell array
                     try:
-                        str_data = np.array([str(item) for item in data.flatten()])
+                        str_data = np.array([str(item) if item is not None else '' for item in data.flatten()])
                     except Exception:
                         Logger.log_message_static(f"Parser-MAT: Cannot convert object array '{name}' to strings",
                                                   Logger.WARNING)
@@ -292,23 +366,53 @@ class MATParser:
 
                 # Try to detect if strings represent boolean values
                 upper_data = np.char.upper(str_data)
+                unique_vals = np.unique(upper_data)
+                bool_vals = set(['TRUE', 'FALSE', '1', '0', 'YES', 'NO', 'ON', 'OFF'])
 
-                if np.any(np.isin(upper_data, ['TRUE', 'FALSE'])):
-                    Logger.log_message_static(f"Parser-MAT: Detected boolean strings in variable '{name}'",
-                                              Logger.DEBUG)
-                    return upper_data
+                if len(unique_vals) <= 2 and any(val in bool_vals for val in unique_vals):
+                    Logger.log_message_static(f"Parser-MAT: Detected boolean strings in variable '{name}'", Logger.DEBUG)
+                    # Normalize to TRUE/FALSE
+                    result = np.where(np.isin(upper_data, ['TRUE', '1', 'YES', 'ON']), 'TRUE', 'FALSE')
+                    return result
 
                 # Try numeric conversion
                 try:
-                    # Replace common decimal separators
-                    cleaned_data = np.char.replace(str_data, ',', '.')
-                    numeric_data = cleaned_data.astype(float)
-                    Logger.log_message_static(f"Parser-MAT: Successfully converted string variable '{name}' to numeric",
-                                              Logger.DEBUG)
-                    return numeric_data.astype(np.float32)
-                except (ValueError, TypeError):
-                    Logger.log_message_static(f"Parser-MAT: Variable '{name}' contains non-numeric strings, skipping",
-                                              Logger.WARNING)
+                    # Replace common decimal separators and clean whitespace
+                    cleaned_data = np.char.strip(str_data)
+                    cleaned_data = np.char.replace(cleaned_data, ',', '.')
+
+                    # Handle empty strings
+                    cleaned_data = np.where(cleaned_data == '', '0', cleaned_data)
+
+                    # Try to convert to numeric
+                    numeric_data = []
+                    for val in cleaned_data:
+                        try:
+                            numeric_data.append(float(val))
+                        except:
+                            numeric_data.append(np.nan)
+
+                    numeric_data = np.array(numeric_data)
+
+                    # Check if conversion was successful for most values
+                    valid_ratio = np.sum(np.isfinite(numeric_data)) / len(numeric_data)
+                    if valid_ratio > 0.7:  # At least 70% of values converted successfully
+                        Logger.log_message_static(
+                            f"Parser-MAT: Successfully converted string variable '{name}' to numeric ({valid_ratio:.1%} success rate)",
+                            Logger.DEBUG)
+                        # Fill NaN with 0
+                        numeric_data = np.where(np.isfinite(numeric_data), numeric_data, 0)
+                        return numeric_data.astype(np.float32)
+                    else:
+                        Logger.log_message_static(
+                            f"Parser-MAT: Variable '{name}' has too many non-numeric strings ({valid_ratio:.1%} success rate), skipping",
+                            Logger.WARNING)
+                        return None
+
+                except Exception as conv_e:
+                    Logger.log_message_static(
+                        f"Parser-MAT: Failed to convert string variable '{name}' to numeric: {str(conv_e)}",
+                        Logger.WARNING)
                     return None
 
             else:
@@ -318,7 +422,7 @@ class MATParser:
 
         except Exception as e:
             Logger.log_message_static(f"Parser-MAT: Error processing signal data for '{name}': {str(e)}",
-                                      Logger.WARNING)
+                                      Logger.ERROR)
             return None
 
     def _generate_synthetic_timestamps(self, signals: Dict[str, np.ndarray]) -> np.ndarray:

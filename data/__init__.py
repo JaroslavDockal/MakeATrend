@@ -29,7 +29,7 @@ of signal data from initial file loading through processing to persistence.
 # Export submodule functionality
 from .loader import load_single_file, load_multiple_files
 from .csv_dialect import ParseOptions, ParseOptionsDialog, detect_csv_dialect
-from .project import save_project_state, load_project_state
+from .project_management import save_project_state, load_project_state
 
 # Define public API
 __all__ = [

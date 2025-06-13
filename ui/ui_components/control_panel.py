@@ -8,7 +8,8 @@ from PySide6.QtWidgets import (
     QScrollArea, QWidget, QSpinBox, QLineEdit
 )
 
-from analysis.analysis_dialog import show_analysis_dialog
+from analysis.analysis_main import show_analysis_dialog
+from ui.widgets.movable_legend import MovableLegend
 
 
 def setup_control_panel(viewer):
@@ -63,6 +64,7 @@ def setup_button_section(viewer, layout):
     analysis_btn = QPushButton("Signal Analysis")
     analysis_btn.clicked.connect(lambda: show_analysis_dialog(viewer))
     analysis_btn.setToolTip("Open signal analysis tools (FFT, statistics, etc.)")
+    analysis_btn.setDisabled(True)
     right_column.addWidget(analysis_btn)
 
     virtual_btn = QPushButton("Add Virtual Signal")
@@ -111,12 +113,11 @@ def setup_checkboxes(viewer, layout):
     viewer.downsample_chk.setToolTip("Reduce data points for better performance with large datasets")
     col1.addWidget(viewer.downsample_chk)
 
-    #TODO not working - might be used for something else. Leave as placeholder
-    viewer.log_scale_chk = QCheckBox("Logaritmic Scale")
-    viewer.log_scale_chk.setChecked(False)
-    viewer.log_scale_chk.toggled.connect(viewer.toggle_axis_scale)
-    viewer.log_scale_chk.setToolTip("Switch to axis logaritmic/Decimal format.")
-    col2.addWidget(viewer.log_scale_chk)
+    viewer.show_legend_chk = QCheckBox("Show Legend")
+    viewer.show_legend_chk.setChecked(True)
+    viewer.show_legend_chk.toggled.connect(viewer.toggle_legend)
+    viewer.show_legend_chk.setToolTip("Show/hide movable legend with signal names and colors")
+    col2.addWidget(viewer.show_legend_chk)
 
     viewer.toggle_crosshair_chk = QCheckBox("Show Crosshair")
     viewer.toggle_crosshair_chk.toggled.connect(viewer.toggle_crosshair)
@@ -173,3 +174,6 @@ def setup_cursors(viewer):
 
     viewer.cursor_info = CursorInfoDialog(viewer)
     viewer.crosshair = Crosshair(viewer.main_view)
+
+    viewer.legend = MovableLegend(viewer)
+    viewer.plot_widget.scene().addItem(viewer.legend)

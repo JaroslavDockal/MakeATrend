@@ -81,6 +81,9 @@ def clear_signals(self):
     self.signal_widgets.clear()
     self.update_axis_labels()
 
+    if hasattr(self, 'legend'):
+        self.legend.update_legend()
+
 
 def toggle_signal(self):
     """
@@ -151,6 +154,11 @@ def toggle_signal(self):
                     del self.signal_styles[name]
                 widgets['checkbox'].setStyleSheet("color: white;")
             self.update_axis_labels()
+
+            # Update legend when signals change
+            if hasattr(self, 'legend'):
+                self.legend.update_legend()
+
             break
 
 

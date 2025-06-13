@@ -10,7 +10,7 @@ and bit manipulation operations. It supports:
 
 import numpy as np
 from utils.logger import Logger
-from utils.safe_expression_validator import SafeExpressionValidator
+from utils.expression_validator import SafeExpressionValidator
 
 
 def compute_virtual_signal(expression, time_array, data_signals, aliases=None):
@@ -53,9 +53,13 @@ def compute_virtual_signal(expression, time_array, data_signals, aliases=None):
 
     # Add signals with specified aliases
     for alias, signal_name in aliases.items():
+        Logger.log_message_static(f"Widget-VirtualSignal: Processing alias '{alias}' for signal '{signal_name}'", Logger.DEBUG)
         if signal_name not in data_signals:
             error_msg = f"Signal '{signal_name}' not found in data"
-            Logger.log_message_static(error_msg, Logger.ERROR)
+            Logger.log_message_static(f"Widget-VirtualSignal: Aliases mapping: {aliases}", Logger.DEBUG)
+            Logger.log_message_static(f"Widget-VirtualSignal: Data signals available: {list(data_signals.keys())}",
+                                      Logger.DEBUG)
+            Logger.log_message_static(f"Widget-VirtualSignal: {error_msg}", Logger.ERROR)
             raise ValueError(error_msg)
 
         try:

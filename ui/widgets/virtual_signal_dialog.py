@@ -15,10 +15,11 @@ from PySide6.QtCore import Qt
 
 from utils.logger import Logger
 from ui.widgets.virtual_signal_computation import (
-    validate_expression, validate_signal_name,
     compute_virtual_signal, compute_bit_decomposition,
     compute_single_bit_extraction
 )
+
+from utils.expression_validator import validate_expression, validate_signal_name
 
 
 class VirtualSignalDialog(QDialog):

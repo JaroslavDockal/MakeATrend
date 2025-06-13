@@ -2,6 +2,9 @@
 Main GUI implementation of the CSV Signal Viewer with custom color support.
 """
 import os
+import pyqtgraph as pg
+
+from pyqtgraph import setConfigOption, DateAxisItem
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
@@ -9,14 +12,12 @@ from PySide6.QtWidgets import (
     QMainWindow, QSplitter, QWidget, QStatusBar
 )
 
-import pyqtgraph as pg
-from pyqtgraph import setConfigOption, DateAxisItem
 
-from .ui_components.control_panel import setup_control_panel
-from .ui_components.plot_area import setup_plot_area, setup_axes
+from ui.ui_components.control_panel import setup_control_panel
+from ui.ui_components.plot_area import setup_plot_area, setup_axes
+from ui.ui_components.log_window import LogWindow
 from utils.custom_viewbox import CustomViewBox
 from utils.logger import Logger
-from .ui_components.log_window import LogWindow
 from utils.signal_colors import SignalColors
 
 class SignalViewer(QMainWindow):
@@ -141,7 +142,7 @@ class SignalViewer(QMainWindow):
     from .ui_components.panel_operations import (
         toggle_complex_mode, toggle_right_panel, toggle_cursor_info_mode,
         toggle_crosshair, toggle_grid, toggle_cursor, update_cursor_info,
-        toggle_log_window, toggle_background, toggle_axis_scale
+        toggle_log_window, toggle_background, toggle_axis_scale, toggle_legend
     )
 
     from .ui_components.signal_operations import (

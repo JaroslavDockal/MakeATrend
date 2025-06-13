@@ -25,7 +25,6 @@ def toggle_complex_mode(self, state):
         widgets['color_btn'].setVisible(state)
         widgets['width'].setVisible(state)
 
-
 def toggle_right_panel(self, checked):
     """
     Shows or hides the control panel on the right side of the application.
@@ -39,7 +38,6 @@ def toggle_right_panel(self, checked):
     self.log_message(f"Components-PanelOp: Control panel {'hidden' if checked else 'shown'}", self.DEBUG)
     self.control_panel.setVisible(not checked)
     self.show_panel_btn.setVisible(checked)
-
 
 def toggle_cursor_info_mode(self, docked):
     """
@@ -63,7 +61,6 @@ def toggle_cursor_info_mode(self, docked):
         for name, widgets in self.signal_widgets.items():
             self.scroll_layout.addWidget(widgets['row'])
 
-
 def toggle_crosshair(self, state):
     """
     Toggles the crosshair visibility.
@@ -73,7 +70,6 @@ def toggle_crosshair(self, state):
     """
     self.log_message(f"Components-PanelOp: Crosshair {'enabled' if state else 'disabled'}", self.DEBUG)
     self.crosshair.toggle(state)
-
 
 def toggle_grid(self, state: bool):
     """
@@ -143,6 +139,28 @@ def toggle_cursor(self, cursor, state):
     self.cursor_info.setVisible(self.cursor_a.isVisible() or self.cursor_b.isVisible())
     self.update_cursor_info()
 
+def toggle_log_window(self, state):
+    """
+    Show or hide the log window.
+
+    Args:
+        state (bool): True to show, False to hide.
+    """
+    self.log_message(f"Components-PanelOp: Log window {'shown' if state else 'hidden'}", self.DEBUG)
+
+    if state:
+        self.log_window.show()
+        # Connect log window to logger
+        self.logger.set_log_window(self.log_window)
+    else:
+        self.log_window.hide()
+
+def toggle_legend(self, checked):
+    """Toggle the visibility of the movable legend."""
+    if hasattr(self, 'legend'):
+        self.legend.set_visible(checked)
+        if checked:
+            self.legend.update_legend()
 
 def update_cursor_info(self):
     """
@@ -200,20 +218,3 @@ def update_cursor_info(self):
     v_b = get_vals(t_b, has_b)
 
     self.cursor_info.update_data(s_a, s_b, v_a, v_b, has_a, has_b, date_str)
-
-
-def toggle_log_window(self, state):
-    """
-    Show or hide the log window.
-
-    Args:
-        state (bool): True to show, False to hide.
-    """
-    self.log_message(f"Components-PanelOp: Log window {'shown' if state else 'hidden'}", self.DEBUG)
-
-    if state:
-        self.log_window.show()
-        # Connect log window to logger
-        self.logger.set_log_window(self.log_window)
-    else:
-        self.log_window.hide()
